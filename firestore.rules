@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == 'mardoukenki@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         getUserData().role == 'admin')
+      );
+    }
+
+    function isAgentOrAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == 'mardoukenki@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         getUserData().role in ['admin', 'agent'])
+      );
+    }
+
+    // User Profiles
+    match /users/{userId} {
+      allow read, write: if isAuthenticated() && (isOwner(userId) || isAdmin());
+    }
+
+    // Appointments
+    match /appointments/{appointmentId} {
+      allow create: if isAuthenticated();
+      allow read: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid || isAgentOrAdmin());
+      allow update, delete: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid || isAgentOrAdmin());
+    }
+
+    // Subscriptions
+    match /subscriptions/{subscriptionId} {
+      allow create: if isAuthenticated();
+      allow read: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid || isAgentOrAdmin());
+      allow update, delete: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid || isAgentOrAdmin());
+    }
+
+    // Visits (Planning terrain — admin/agent + patient client)
+    match /visits/{visitId} {
+      allow read: if isAuthenticated() && (
+        resource == null || resource.data.clientUserId == request.auth.uid || isAgentOrAdmin()
+      );
+      allow create, update, delete: if isAgentOrAdmin();
+    }
+
+    // Reports (Rapports d'examens médicaux)
+    match /reports/{reportId} {
+      allow read: if isAuthenticated() && (
+        resource == null || resource.data.clientUserId == request.auth.uid || resource.data.userId == request.auth.uid || isAgentOrAdmin()
+      );
+      allow create, update, delete: if isAgentOrAdmin();
+    }
+
+    // Medical Records (Documents du patient)
+    match /medicalRecords/{recordId} {
+      allow read, update, delete: if isAuthenticated() && (
+        resource == null || resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+    }
+  }
+}
+
+

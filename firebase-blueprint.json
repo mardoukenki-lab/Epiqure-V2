@@ -1,0 +1,145 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information and RBAC role",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["client", "agent", "admin"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Client appointment booking",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "fullName": { "type": "string" },
+        "phone": { "type": "string" },
+        "serviceType": { "type": "string" },
+        "neighborhood": { "type": "string" },
+        "preferredDate": { "type": "string" },
+        "relativeName": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "fullName", "phone"]
+    },
+    "Subscription": {
+      "title": "Subscription",
+      "description": "User healthcare subscription (Forfait Maison / Entreprise)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "planName": { "type": "string" },
+        "planType": { "type": "string" },
+        "subscriberName": { "type": "string" },
+        "subscriberEmail": { "type": "string" },
+        "subscriberPhone": { "type": "string" },
+        "beneficiaryName": { "type": "string" },
+        "beneficiaryPhone": { "type": "string" },
+        "beneficiaryNeighborhood": { "type": "string" },
+        "weeklyPrice": { "type": "number" },
+        "monthlyCost": { "type": "number" },
+        "scheduledDayOfWeek": { "type": "string" },
+        "startDate": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "planName", "subscriberName"]
+    },
+    "Visit": {
+      "title": "Visit",
+      "description": "Scheduled or completed healthcare visit",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "subscriptionId": { "type": "string" },
+        "appointmentId": { "type": "string" },
+        "clientUserId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientPhone": { "type": "string" },
+        "neighborhood": { "type": "string" },
+        "scheduledDate": { "type": "string" },
+        "scheduledDayOfWeek": { "type": "string" },
+        "status": { "type": "string" },
+        "agentId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "clientName", "scheduledDate"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "Individual health examination report",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "visitId": { "type": "string" },
+        "beneficiaryName": { "type": "string" },
+        "tensionArterielle": { "type": "string" },
+        "glycemie": { "type": "number" },
+        "notesAgent": { "type": "string" },
+        "recommandations": { "type": "string" },
+        "sentVia": { "type": "string" },
+        "sentAt": { "type": "string" }
+      },
+      "required": ["id", "beneficiaryName", "tensionArterielle", "glycemie"]
+    },
+    "MedicalRecord": {
+      "title": "MedicalRecord",
+      "description": "Patient uploaded medical test results, prescriptions, or documents",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "category": { "type": "string" },
+        "title": { "type": "string" },
+        "recordDate": { "type": "string" },
+        "notes": { "type": "string" },
+        "fileDataUrl": { "type": "string" },
+        "fileName": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "patientName", "category", "title"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User documents"
+    },
+    "/appointments/{appointmentId}": {
+      "schema": "Appointment",
+      "description": "Appointment documents"
+    },
+    "/subscriptions/{subscriptionId}": {
+      "schema": "Subscription",
+      "description": "Subscription documents"
+    },
+    "/visits/{visitId}": {
+      "schema": "Visit",
+      "description": "Visit documents"
+    },
+    "/reports/{reportId}": {
+      "schema": "Report",
+      "description": "Medical report documents"
+    },
+    "/medicalRecords/{recordId}": {
+      "schema": "MedicalRecord",
+      "description": "Medical record test results and prescriptions"
+    }
+  }
+}

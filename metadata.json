@@ -1,0 +1,6 @@
+{
+  "name": "EPICURE",
+  "description": "EPICURE - Service d'Itinéraire de Santé et de Proximité à Dabou, Côte d'Ivoire. Soins, dépistage et suivi à domicile pour vous et vos proches.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
