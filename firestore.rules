@@ -2,7 +2,9 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // ----------------------------------------------------
+    // Helper Functions
+    // ----------------------------------------------------
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -11,13 +13,21 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && request.auth.token.email == 'mardoukenki@gmail.com';
+    }
+
     function getUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     function isAdmin() {
       return isAuthenticated() && (
-        request.auth.token.email == 'mardoukenki@gmail.com' ||
+        isSuperAdmin() ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          getUserData().role == 'admin')
       );
@@ -25,53 +35,124 @@ service cloud.firestore {
 
     function isAgentOrAdmin() {
       return isAuthenticated() && (
-        request.auth.token.email == 'mardoukenki@gmail.com' ||
+        isSuperAdmin() ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          getUserData().role in ['admin', 'agent'])
       );
     }
 
-    // User Profiles
+    // ----------------------------------------------------
+    // User Profiles (/users/{userId})
+    // ----------------------------------------------------
     match /users/{userId} {
-      allow read, write: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow read: if isAuthenticated() && (isOwner(userId) || isAgentOrAdmin());
+      
+      // On create: users cannot self-assign the 'admin' or 'agent' role unless they are the superAdmin
+      allow create: if isAuthenticated() && isOwner(userId) && isValidId(userId) &&
+        (!('role' in request.resource.data) || request.resource.data.role == 'client' || isSuperAdmin());
+      
+      // On update: non-admins cannot modify the 'role' field (prevents self-privilege escalation)
+      allow update: if isAuthenticated() && isValidId(userId) && (
+        (isOwner(userId) && !('role' in request.resource.data.diff(resource.data).affectedKeys())) ||
+        isAdmin()
+      );
+      
+      allow delete: if isAdmin();
     }
 
-    // Appointments
+    // ----------------------------------------------------
+    // Appointments (/appointments/{appointmentId})
+    // ----------------------------------------------------
     match /appointments/{appointmentId} {
-      allow create: if isAuthenticated();
-      allow read: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid || isAgentOrAdmin());
-      allow update, delete: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid || isAgentOrAdmin());
+      allow read: if isAuthenticated() && (
+        resource == null || resource.data.userId == request.auth.uid || isAgentOrAdmin()
+      );
+      
+      // Creating appointment: must be bound to auth.uid and have valid schema
+      allow create: if isAuthenticated() && isValidId(appointmentId) && (
+        (request.resource.data.userId == request.auth.uid || isAgentOrAdmin()) &&
+        request.resource.data.fullName is string &&
+        request.resource.data.fullName.size() <= 150 &&
+        request.resource.data.phone is string &&
+        request.resource.data.phone.size() <= 50 &&
+        request.resource.data.status in ['pending', 'confirmed', 'completed', 'cancelled']
+      );
+      
+      // Updating appointment: owner cannot change ownership to another userId
+      allow update: if isAuthenticated() && isValidId(appointmentId) && (
+        (resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid &&
+         !('userId' in request.resource.data.diff(resource.data).affectedKeys())) ||
+        isAgentOrAdmin()
+      );
+      
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAgentOrAdmin());
     }
 
-    // Subscriptions
+    // ----------------------------------------------------
+    // Subscriptions (/subscriptions/{subscriptionId})
+    // ----------------------------------------------------
     match /subscriptions/{subscriptionId} {
-      allow create: if isAuthenticated();
-      allow read: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid || isAgentOrAdmin());
-      allow update, delete: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid || isAgentOrAdmin());
+      allow read: if isAuthenticated() && (
+        resource == null || resource.data.userId == request.auth.uid || isAgentOrAdmin()
+      );
+      
+      // Creating subscription: must be bound to auth.uid and have valid positive price
+      allow create: if isAuthenticated() && isValidId(subscriptionId) && (
+        (request.resource.data.userId == request.auth.uid || isAgentOrAdmin()) &&
+        request.resource.data.planName is string &&
+        request.resource.data.planName.size() <= 100 &&
+        request.resource.data.status in ['pending', 'active', 'paused', 'cancelled'] &&
+        (request.resource.data.monthlyCost is number ? request.resource.data.monthlyCost >= 0 : true)
+      );
+      
+      // Updating subscription: owner cannot change ownership to another userId
+      allow update: if isAuthenticated() && isValidId(subscriptionId) && (
+        (resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid &&
+         !('userId' in request.resource.data.diff(resource.data).affectedKeys())) ||
+        isAgentOrAdmin()
+      );
+      
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAgentOrAdmin());
     }
 
-    // Visits (Planning terrain — admin/agent + patient client)
+    // ----------------------------------------------------
+    // Visits (/visits/{visitId}) - Field planning
+    // ----------------------------------------------------
     match /visits/{visitId} {
       allow read: if isAuthenticated() && (
         resource == null || resource.data.clientUserId == request.auth.uid || isAgentOrAdmin()
       );
-      allow create, update, delete: if isAgentOrAdmin();
+      allow create, update, delete: if isAgentOrAdmin() && isValidId(visitId);
     }
 
-    // Reports (Rapports d'examens médicaux)
+    // ----------------------------------------------------
+    // Reports (/reports/{reportId}) - Clinical exam reports
+    // ----------------------------------------------------
     match /reports/{reportId} {
       allow read: if isAuthenticated() && (
         resource == null || resource.data.clientUserId == request.auth.uid || resource.data.userId == request.auth.uid || isAgentOrAdmin()
       );
-      allow create, update, delete: if isAgentOrAdmin();
+      allow create, update, delete: if isAgentOrAdmin() && isValidId(reportId);
     }
 
-    // Medical Records (Documents du patient)
+    // ----------------------------------------------------
+    // Medical Records (/medicalRecords/{recordId}) - Uploaded patient docs
+    // ----------------------------------------------------
     match /medicalRecords/{recordId} {
-      allow read, update, delete: if isAuthenticated() && (
+      allow read: if isAuthenticated() && (
         resource == null || resource.data.userId == request.auth.uid || isAdmin()
       );
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidId(recordId) && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && isValidId(recordId) && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+    }
+
+    // ----------------------------------------------------
+    // Global Default-Deny Catch-All
+    // ----------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

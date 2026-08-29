@@ -181,6 +181,95 @@ async function sendResendEmail({
   }
 }
 
+// Server-side Paystack Transaction Verification Endpoint
+app.post("/api/payments/verify", async (req, res) => {
+  try {
+    const { reference, expectedAmount, planOrServiceName, customerEmail } = req.body;
+    
+    if (!reference || typeof reference !== "string") {
+      return res.status(400).json({
+        verified: false,
+        error: "Paramètre 'reference' manquant ou invalide."
+      });
+    }
+
+    console.log(`[API /api/payments/verify] Verifying transaction reference: ${reference}`);
+
+    const paystackSecretKey =
+      process.env.PAYSTACK_SECRET_KEY ||
+      // Fallback to test secret key for preview/sandbox environment
+      "sk_test_6ec5c1f0340798e29a8a7090b847864f1c32bb4f";
+
+    // Call Paystack API directly with secret key
+    const paystackResponse = await fetch(
+      `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference.trim())}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${paystackSecretKey}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    const data = await paystackResponse.json();
+
+    if (!paystackResponse.ok || !data.status || !data.data) {
+      console.warn("[Paystack Verification Failed]:", data);
+      return res.status(400).json({
+        verified: false,
+        error: data.message || "Transaction introuvable ou non reconnue par Paystack."
+      });
+    }
+
+    const tx = data.data;
+
+    if (tx.status !== "success") {
+      console.warn(`[Paystack Incomplete Transaction]: status is '${tx.status}'`);
+      return res.status(400).json({
+        verified: false,
+        status: tx.status,
+        error: `Le statut de la transaction n'est pas validé (Statut: ${tx.status}).`
+      });
+    }
+
+    // Verify amount in subunits (FCFA cents/centimes x100)
+    if (expectedAmount && Number(expectedAmount) > 0) {
+      const expectedSubunits = Math.round(Number(expectedAmount) * 100);
+      const paidSubunits = Number(tx.amount);
+      if (Math.abs(paidSubunits - expectedSubunits) > 100) {
+        console.warn(`[Paystack Amount Mismatch]: Expected ${expectedSubunits}, Received ${paidSubunits}`);
+        return res.status(400).json({
+          verified: false,
+          error: `Le montant validé (${paidSubunits / 100} FCFA) ne correspond pas au montant attendu (${expectedAmount} FCFA).`
+        });
+      }
+    }
+
+    console.log(`[Paystack Success]: Transaction ${reference} verified for ${tx.amount / 100} ${tx.currency}`);
+
+    return res.json({
+      verified: true,
+      reference: tx.reference,
+      paidAmountFCFA: tx.amount / 100,
+      currency: tx.currency,
+      channel: tx.channel,
+      paidAt: tx.paid_at,
+      gatewayResponse: tx.gateway_response,
+      customer: {
+        email: tx.customer?.email,
+        customerCode: tx.customer?.customer_code
+      }
+    });
+  } catch (error: any) {
+    console.error("[Paystack Server Exception]:", error);
+    return res.status(500).json({
+      verified: false,
+      error: error.message || "Erreur interne lors de la vérification du paiement."
+    });
+  }
+});
+
 // Full-stack Notification route via Resend & Formspree
 app.post("/api/notify", notifyLimiter, async (req, res) => {
   try {

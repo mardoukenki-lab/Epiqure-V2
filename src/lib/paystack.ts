@@ -113,13 +113,43 @@ export async function openPaystackModal(options: PaystackCheckoutOptions): Promi
         ],
         ...options.metadata,
       },
-      callback: (response) => {
-        console.log('[Paystack] Payment success:', response);
-        options.onSuccess({
-          reference: response.reference || generatedRef,
-          status: 'success',
-          paidAmount: options.amountFCFA,
-        });
+      callback: async (response) => {
+        console.log('[Paystack] Payment popup completed, verifying with server...', response);
+        const ref = response.reference || generatedRef;
+        try {
+          // Call backend server verification endpoint with secret key
+          const verifyRes = await fetch('/api/payments/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              reference: ref,
+              expectedAmount: options.amountFCFA,
+              planOrServiceName: options.planOrServiceName,
+              customerEmail: options.email,
+            }),
+          });
+
+          const verifyData = await verifyRes.json();
+
+          if (!verifyRes.ok || !verifyData.verified) {
+            throw new Error(verifyData.error || 'La vérification sécurisée du paiement a échoué côté serveur.');
+          }
+
+          console.log('[Paystack] Server verification successful:', verifyData);
+
+          options.onSuccess({
+            reference: verifyData.reference || ref,
+            status: 'success',
+            paidAmount: verifyData.paidAmountFCFA || options.amountFCFA,
+          });
+        } catch (verifErr: any) {
+          console.error('[Paystack] Verification error:', verifErr);
+          if (options.onError) {
+            options.onError(verifErr);
+          } else {
+            alert(`Erreur de validation du paiement : ${verifErr.message}`);
+          }
+        }
       },
       onClose: () => {
         console.log('[Paystack] Checkout modal closed by user');
