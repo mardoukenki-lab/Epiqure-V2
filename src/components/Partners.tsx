@@ -9,7 +9,7 @@ export default function Partners() {
       icon: <Activity className="w-5 h-5 text-rose-500" />
     },
     {
-      name: "Clinique de l'Espoir",
+      name: "Clinique SAREPTA",
       type: "Clinique Privée Partenaire",
       desc: "Accueil privilégié et prise de rendez-vous rapide pour nos abonnés nécessitant une imagerie ou une consultation.",
       icon: <Heart className="w-5 h-5 text-blue-500" />

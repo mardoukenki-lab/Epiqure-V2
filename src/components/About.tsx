@@ -41,43 +41,23 @@ export default function About() {
             </div>
           </div>
 
-          {/* Grid of 4 images */}
-          <div className="lg:col-span-6 grid grid-cols-2 gap-4">
-            <div className="space-y-4 pt-8">
-              <div className="rounded-2xl overflow-hidden shadow-md group">
-                <img
-                  src={IMAGES.bpMonitor}
-                  alt="Dépistage de tension EPICURE Dabou"
-                  className="w-full h-44 object-cover group-hover:scale-105 transition-transform duration-500"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-              <div className="rounded-2xl overflow-hidden shadow-md group">
-                <img
-                  src={IMAGES.tabletCharts}
-                  alt="Suivi de données de santé EPICURE"
-                  className="w-full h-60 object-cover group-hover:scale-105 transition-transform duration-500"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
+          {/* Images panel */}
+          <div className="lg:col-span-6 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+            <div className="rounded-2xl overflow-hidden shadow-md group">
+              <img
+                src={IMAGES.bpMonitor}
+                alt="Dépistage de tension EPICURE Dabou"
+                className="w-full h-64 sm:h-72 object-cover group-hover:scale-105 transition-transform duration-500"
+                referrerPolicy="no-referrer"
+              />
             </div>
-            <div className="space-y-4">
-              <div className="rounded-2xl overflow-hidden shadow-md group">
-                <img
-                  src={IMAGES.team}
-                  alt="L'équipe de professionnels EPICURE Dabou"
-                  className="w-full h-60 object-cover group-hover:scale-105 transition-transform duration-500"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-              <div className="rounded-2xl overflow-hidden shadow-md group">
-                <img
-                  src={IMAGES.bloodSugar}
-                  alt="Test de glycémie à Dabou"
-                  className="w-full h-44 object-cover group-hover:scale-105 transition-transform duration-500"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
+            <div className="rounded-2xl overflow-hidden shadow-md group">
+              <img
+                src={IMAGES.tabletCharts}
+                alt="Suivi de données de santé EPICURE"
+                className="w-full h-64 sm:h-72 object-cover group-hover:scale-105 transition-transform duration-500"
+                referrerPolicy="no-referrer"
+              />
             </div>
           </div>
         </div>

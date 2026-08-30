@@ -24,7 +24,7 @@ export default function Steps() {
       num: "04",
       icon: <MessageSquareText className="w-5 h-5 text-primary-brand" />,
       title: "Rapport instantané",
-      desc: "Le parrain local ou à l'étranger reçoit sous 24 heures la fiche de synthèse sur son smartphone WhatsApp."
+      desc: "Le parrain local ou à l'étranger reçoit sous 24 heures la fiche de synthèse sur son smartphone via WhatsApp."
     }
   ];
 
