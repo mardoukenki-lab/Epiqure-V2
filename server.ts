@@ -198,10 +198,10 @@ app.post("/api/payments/verify", async (req, res) => {
     const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
 
     if (!paystackSecretKey) {
-      console.error("[Paystack] PAYSTACK_SECRET_KEY manquante : vérification côté serveur désactivée.");
+      console.error("[Paystack] PAYSTACK_SECRET_KEY absente dans les variables d'environnement. Vérification côté serveur impossible.");
       return res.status(503).json({
         verified: false,
-        error: "Le service de vérification des paiements n'est pas configuré sur le serveur."
+        error: "Le service de vérification des paiements est temporairement indisponible : la clé secrète PAYSTACK_SECRET_KEY n'est pas configurée sur le serveur."
       });
     }
 
