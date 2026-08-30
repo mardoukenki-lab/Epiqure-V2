@@ -118,7 +118,7 @@ export default function AdminDashboard({
   }, []);
 
   // Appointment Status Toggle
-  const handleUpdateAppointmentStatus = async (appId: string, newStatus: 'Confirmed' | 'Completed' | 'Cancelled') => {
+  const handleUpdateAppointmentStatus = async (appId: string, newStatus: 'confirmed' | 'completed' | 'cancelled' | 'pending') => {
     try {
       await updateDoc(doc(db, 'appointments', appId), { status: newStatus });
     } catch (err) {
@@ -127,7 +127,7 @@ export default function AdminDashboard({
   };
 
   // Subscription Status Toggle
-  const handleUpdateSubStatus = async (subId: string, newStatus: 'Active' | 'Pending' | 'Cancelled') => {
+  const handleUpdateSubStatus = async (subId: string, newStatus: 'active' | 'pending' | 'cancelled' | 'paused') => {
     try {
       await updateDoc(doc(db, 'subscriptions', subId), { status: newStatus });
     } catch (err) {
@@ -368,14 +368,14 @@ export default function AdminDashboard({
 
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => handleUpdateAppointmentStatus(app.id, 'Confirmed')}
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors"
+                          onClick={() => handleUpdateAppointmentStatus(app.id, 'confirmed')}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
                         >
                           Confirmer
                         </button>
                         <button
-                          onClick={() => handleUpdateAppointmentStatus(app.id, 'Cancelled')}
-                          className="px-3 py-1.5 bg-slate-200 hover:bg-rose-100 hover:text-rose-700 text-slate-700 rounded-lg text-xs font-bold transition-colors"
+                          onClick={() => handleUpdateAppointmentStatus(app.id, 'cancelled')}
+                          className="px-3 py-1.5 bg-slate-200 hover:bg-rose-100 hover:text-rose-700 text-slate-700 rounded-lg text-xs font-bold transition-colors cursor-pointer"
                         >
                           Refuser
                         </button>
@@ -423,25 +423,25 @@ export default function AdminDashboard({
                         <td className="py-3.5 px-4 text-slate-600">{app.beneficiaryNeighborhood}</td>
                         <td className="py-3.5 px-4">
                           <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                            app.status === 'Confirmed' ? 'bg-emerald-100 text-emerald-800' :
-                            app.status === 'Cancelled' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
+                            app.status?.toLowerCase() === 'confirmed' ? 'bg-emerald-100 text-emerald-800' :
+                            app.status?.toLowerCase() === 'cancelled' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
                           }`}>
-                            {app.status === 'Confirmed' ? 'Confirmé' : app.status === 'Cancelled' ? 'Annulé' : 'En attente'}
+                            {app.status?.toLowerCase() === 'confirmed' ? 'Confirmé' : app.status?.toLowerCase() === 'cancelled' ? 'Annulé' : 'En attente'}
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-right space-x-1">
-                          {app.status !== 'Confirmed' && (
+                          {app.status?.toLowerCase() !== 'confirmed' && (
                             <button
-                              onClick={() => handleUpdateAppointmentStatus(app.id, 'Confirmed')}
-                              className="px-2.5 py-1 bg-emerald-600 text-white rounded text-[11px] font-bold hover:bg-emerald-500"
+                              onClick={() => handleUpdateAppointmentStatus(app.id, 'confirmed')}
+                              className="px-2.5 py-1 bg-emerald-600 text-white rounded text-[11px] font-bold hover:bg-emerald-500 cursor-pointer"
                             >
                               Valider
                             </button>
                           )}
-                          {app.status !== 'Cancelled' && (
+                          {app.status?.toLowerCase() !== 'cancelled' && (
                             <button
-                              onClick={() => handleUpdateAppointmentStatus(app.id, 'Cancelled')}
-                              className="px-2.5 py-1 bg-slate-200 text-slate-700 rounded text-[11px] font-bold hover:bg-rose-100 hover:text-rose-700"
+                              onClick={() => handleUpdateAppointmentStatus(app.id, 'cancelled')}
+                              className="px-2.5 py-1 bg-slate-200 text-slate-700 rounded text-[11px] font-bold hover:bg-rose-100 hover:text-rose-700 cursor-pointer"
                             >
                               Annuler
                             </button>
@@ -471,24 +471,35 @@ export default function AdminDashboard({
                 {subscriptions.map((sub) => (
                   <div key={sub.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold">
-                        {sub.planName}
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold">
+                          {sub.planName}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          sub.billingCycle === 'annuel' ? 'bg-amber-100 text-amber-900' : 'bg-slate-200 text-slate-700'
+                        }`}>
+                          {sub.billingCycle === 'annuel' ? 'Annuel' : 'Mensuel'}
+                        </span>
+                      </div>
+                      <span className="font-extrabold text-sm text-emerald-800">
+                        {sub.billingCycle === 'annuel' && sub.annualCost
+                          ? `${sub.annualCost.toLocaleString()} FCFA/an`
+                          : `${sub.monthlyCost.toLocaleString()} FCFA/mois`}
                       </span>
-                      <span className="font-extrabold text-sm text-emerald-800">{sub.monthlyCost.toLocaleString()} FCFA/mois</span>
                     </div>
                     <h3 className="font-bold text-xs text-slate-900">{sub.householdOrCompanyName}</h3>
                     <div className="text-xs text-slate-600 space-y-1">
                       <p>Souscripteur: {sub.subscriberName} ({sub.subscriberPhone})</p>
                       <p>Quartier: {sub.beneficiaryNeighborhood}</p>
-                      <p>Jour retenu: Each {sub.scheduledDayOfWeek || 'Samedi'}</p>
+                      <p>Jour retenu: Chaque {sub.scheduledDayOfWeek || 'Samedi'}</p>
                     </div>
                     <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
                       <span className="text-[10px] text-slate-400 font-mono">ID: {sub.id}</span>
                       <button
-                        onClick={() => handleUpdateSubStatus(sub.id, sub.status === 'Active' ? 'Cancelled' : 'Active')}
+                        onClick={() => handleUpdateSubStatus(sub.id, sub.status === 'active' ? 'cancelled' : 'active')}
                         className="text-xs font-bold text-amber-600 hover:underline"
                       >
-                        {sub.status === 'Active' ? 'Désactiver' : 'Activer'}
+                        {sub.status === 'active' ? 'Désactiver' : 'Activer'}
                       </button>
                     </div>
                   </div>

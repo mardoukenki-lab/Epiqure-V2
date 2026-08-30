@@ -13,10 +13,11 @@ export interface Appointment {
   relativePhone?: string;
   neighborhood: string;
   serviceType: string;
+  bookingCategory?: 'visite_unique' | 'bilan_ponctuel' | 'abonnement';
   preferredDate: string;
   preferredTime: string;
   additionalInfo?: string;
-  status: 'pending' | 'confirmed' | 'completed';
+  status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
   paymentMethod?: 'paystack' | 'cash_on_delivery' | 'wave' | 'orange_money' | 'mtn_momo' | 'card';
   paymentStatus?: 'paid' | 'pending' | 'failed';
   paymentReference?: string;
@@ -30,6 +31,7 @@ export interface Subscription {
   userId?: string;
   planName: 'Individuel' | 'Forfait Maison' | 'Forfait Entreprise' | 'Essentiel' | 'Sérénité Parents' | 'Custom';
   planType?: 'individuel' | 'maison' | 'entreprise' | 'custom';
+  billingCycle?: 'mensuel' | 'annuel';
   subscriberName: string;
   subscriberEmail: string;
   subscriberPhone: string;
@@ -38,10 +40,11 @@ export interface Subscription {
   beneficiaryNeighborhood: string;
   weeklyPrice?: number;
   monthlyCost: number;
+  annualCost?: number;
   scheduledDayOfWeek?: 'samedi' | 'dimanche';
   householdOrCompanyName?: string;
   startDate: string;
-  status: 'active' | 'pending' | 'cancelled';
+  status: 'active' | 'pending' | 'cancelled' | 'paused';
   paymentMethod?: 'paystack' | 'cash_on_delivery' | 'wave' | 'orange_money' | 'mtn_momo' | 'card';
   paymentStatus?: 'paid' | 'pending' | 'failed';
   paymentReference?: string;

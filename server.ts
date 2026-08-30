@@ -195,10 +195,15 @@ app.post("/api/payments/verify", async (req, res) => {
 
     console.log(`[API /api/payments/verify] Verifying transaction reference: ${reference}`);
 
-    const paystackSecretKey =
-      process.env.PAYSTACK_SECRET_KEY ||
-      // Fallback to test secret key for preview/sandbox environment
-      "sk_test_6ec5c1f0340798e29a8a7090b847864f1c32bb4f";
+    const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
+
+    if (!paystackSecretKey) {
+      console.error("[Paystack] PAYSTACK_SECRET_KEY manquante : vérification côté serveur désactivée.");
+      return res.status(503).json({
+        verified: false,
+        error: "Le service de vérification des paiements n'est pas configuré sur le serveur."
+      });
+    }
 
     // Call Paystack API directly with secret key
     const paystackResponse = await fetch(

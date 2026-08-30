@@ -29,6 +29,8 @@ export default function App() {
   const [bookingType, setBookingType] = useState<'visit' | 'subscribe'>('visit');
   const [selectedPlan, setSelectedPlan] = useState<'Essentiel' | 'Sérénité Parents' | undefined>(undefined);
 
+  const [selectedBillingCycle, setSelectedBillingCycle] = useState<'mensuel' | 'annuel' | 'visite_unique' | undefined>(undefined);
+
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
 
@@ -99,14 +101,15 @@ export default function App() {
     }
   };
 
-  const handleOpenBooking = (type: 'visit' | 'subscribe', planName?: string) => {
+  const handleOpenBooking = (type: 'visit' | 'subscribe', planName?: string, billingCycle?: 'mensuel' | 'annuel' | 'visite_unique') => {
     setBookingType(type);
+    setSelectedBillingCycle(billingCycle || (type === 'visit' ? 'visite_unique' : 'mensuel'));
     if (planName === 'Essentiel') {
       setSelectedPlan('Essentiel');
     } else if (planName === 'Sérénité Parents') {
       setSelectedPlan('Sérénité Parents');
     } else {
-      setSelectedPlan(undefined);
+      setSelectedPlan(planName as any);
     }
     setIsBookingOpen(true);
   };
@@ -181,7 +184,9 @@ export default function App() {
                 <Steps />
                 <WhyChooseUs />
                 <Pricing
-                  onSelectPlan={(planName) => handleOpenBooking('subscribe', planName)}
+                  onSelectPlan={(planName, _price, billingCycle) =>
+                    handleOpenBooking(billingCycle === 'visite_unique' ? 'visit' : 'subscribe', planName, billingCycle)
+                  }
                 />
                 <Partners />
                 <Faq />
@@ -255,6 +260,7 @@ export default function App() {
         onClose={() => setIsBookingOpen(false)}
         initialType={bookingType}
         initialPlan={selectedPlan}
+        initialBillingCycle={selectedBillingCycle}
         onBookingSuccess={handleBookingSuccess}
         onSubscriptionSuccess={handleSubscriptionSuccess}
         currentUser={user}

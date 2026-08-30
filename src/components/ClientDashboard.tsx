@@ -695,13 +695,22 @@ export default function ClientDashboard({
                   <div key={sub.id} className="p-5 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold uppercase tracking-wider">
-                          {sub.planName}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold uppercase tracking-wider">
+                            {sub.planName}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            sub.billingCycle === 'annuel' ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-slate-200/70 text-slate-700'
+                          }`}>
+                            {sub.billingCycle === 'annuel' ? 'Annuel (2 mois offerts)' : 'Mensuel'}
+                          </span>
+                        </div>
                         <h3 className="text-base font-extrabold text-slate-900 mt-1.5">{sub.householdOrCompanyName}</h3>
                       </div>
                       <span className="text-sm font-extrabold text-emerald-700">
-                        {sub.monthlyCost.toLocaleString()} FCFA <span className="text-[10px] text-slate-400 font-normal">/ mois</span>
+                        {sub.billingCycle === 'annuel' && sub.annualCost
+                          ? `${sub.annualCost.toLocaleString()} FCFA / an`
+                          : `${sub.monthlyCost.toLocaleString()} FCFA / mois`}
                       </span>
                     </div>
 
