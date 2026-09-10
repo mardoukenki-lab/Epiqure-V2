@@ -6,12 +6,14 @@ import {
   ChevronRight, Calendar, ArrowLeft, LogOut, Sparkles, FolderHeart,
   UploadCloud, Eye, Trash2, Camera, Search, FileImage,
   Users, Stethoscope, Activity, Check, Clock, AlertCircle, RefreshCw, ShieldCheck,
-  FileCheck, Printer, Pill, History
+  FileCheck, Printer, Pill, History, HeartPulse, Loader2
 } from 'lucide-react';
-import { Appointment, Subscription, MedicalRecord, IMAGES } from '../types';
+import { Appointment, Subscription, MedicalRecord, VitalSign, IMAGES } from '../types';
 import { User as FirebaseUser } from 'firebase/auth';
 import { db } from '../lib/firebase';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, query, where } from 'firebase/firestore';
+import VitalSignsTracker from './VitalSignsTracker';
+import { generateMedicalSummaryPdf, generateSingleReportPdf } from '../lib/medicalSummaryPdf';
 
 interface ClientDashboardProps {
   user: FirebaseUser | null;
@@ -26,11 +28,12 @@ export default function ClientDashboard({
   onSignOut,
   onOpenBooking
 }: ClientDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'visits' | 'subscriptions' | 'medical-records' | 'reports' | 'history' | 'simulator' | 'support'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'vitals' | 'visits' | 'subscriptions' | 'medical-records' | 'reports' | 'history' | 'simulator' | 'support'>('overview');
   
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([]);
+  const [vitals, setVitals] = useState<VitalSign[]>([]);
   const [reports, setReports] = useState<Array<{
     id: string;
     beneficiaryName: string;
@@ -43,7 +46,15 @@ export default function ClientDashboard({
     createdAt?: string;
   }>>([]);
 
-  // Medical History states
+  // Medical History & PDF Modal states
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [pdfSuccessToast, setPdfSuccessToast] = useState<string | null>(null);
+  const [pdfIncludeVitals, setPdfIncludeVitals] = useState(true);
+  const [pdfIncludeVisits, setPdfIncludeVisits] = useState(true);
+  const [pdfIncludeReports, setPdfIncludeReports] = useState(true);
+  const [pdfIncludeRecords, setPdfIncludeRecords] = useState(true);
+
   const [historySearch, setHistorySearch] = useState('');
   const [historyCategory, setHistoryCategory] = useState<'all' | 'consultations' | 'prescriptions'>('all');
   const [activePrescriptionModal, setActivePrescriptionModal] = useState<{
@@ -77,95 +88,56 @@ export default function ClientDashboard({
   // Modal Lightbox for medical documents
   const [activeImageModal, setActiveImageModal] = useState<MedicalRecord | null>(null);
 
-  // Download Medical History Summary export helper
-  const handleDownloadFullSummary = () => {
-    const dateStr = new Date().toISOString().split('T')[0];
-    const userName = user?.displayName || 'Adhérent EPICURE';
+  // Download Medical History Summary export helper (PDF)
+  const handleDownloadFullSummary = (customOptions?: {
+    includeVitals?: boolean;
+    includeVisits?: boolean;
+    includeReports?: boolean;
+    includeRecords?: boolean;
+  }) => {
+    try {
+      setIsGeneratingPdf(true);
+      const activeSubscription = subscriptions.find(s => s.status === 'Active' || s.status === 'active') || subscriptions[0];
+      const patientNeighborhood = appointments[0]?.neighborhood || (appointments[0] as any)?.beneficiaryNeighborhood || 'Dabou, Côte d\'Ivoire';
 
-    let content = `====================================================\n`;
-    content += `       EPICURE DABOU - BILAN MEDICAL COMPLET        \n`;
-    content += `    Service d'Itinéraire de Santé et de Proximité   \n`;
-    content += `====================================================\n\n`;
-    content += `Date d'exportation : ${dateStr}\n`;
-    content += `Patient / Adhérent  : ${userName}\n`;
-    content += `Basse-Côte / Dabou, Côte d'Ivoire\n`;
-    content += `----------------------------------------------------\n\n`;
-
-    content += `1. HISTORIQUE DES CONSULTATIONS & CONSTANTES MEDICALES (${reports.length})\n`;
-    content += `----------------------------------------------------\n`;
-    if (reports.length === 0) {
-      content += `Aucune consultation enregistrée à ce jour.\n\n`;
-    } else {
-      reports.forEach((rep, idx) => {
-        content += `[Consultation #${idx + 1}] - Date : ${rep.date}\n`;
-        content += `  Réf. Rapport : ${rep.id}\n`;
-        content += `  Bénéficiaire : ${rep.beneficiaryName}\n`;
-        content += `  Tension      : ${rep.tension || '--/--'}\n`;
-        content += `  Glycémie     : ${rep.glycemie ? rep.glycemie + ' g/L' : '--'}\n`;
-        content += `  Observations : ${rep.notes || 'Visite préventive effectuée à domicile.'}\n`;
-        content += `  Conseils     : ${rep.recommandations || 'Suivi hygiéno-diététique recommandé.'}\n\n`;
+      generateMedicalSummaryPdf({
+        patientName: user?.displayName || 'Adhérent EPICURE',
+        patientEmail: user?.email || undefined,
+        patientPhone: appointments[0]?.phone || undefined,
+        neighborhood: patientNeighborhood,
+        activePlanName: activeSubscription ? `${activeSubscription.planName} (${activeSubscription.billingCycle || 'Mensuel'})` : 'Suivi personnalisé à domicile',
+        vitals,
+        appointments,
+        reports,
+        medicalRecords,
+        options: customOptions || {
+          includeVitals: pdfIncludeVitals,
+          includeVisits: pdfIncludeVisits,
+          includeReports: pdfIncludeReports,
+          includeRecords: pdfIncludeRecords,
+        }
       });
+
+      setIsPdfModalOpen(false);
+      setPdfSuccessToast("Le résumé officiel du dossier médical (PDF) a été généré et téléchargé avec succès !");
+      setTimeout(() => setPdfSuccessToast(null), 5000);
+    } catch (err) {
+      console.error("Erreur de génération PDF :", err);
+      alert("Une erreur est survenue lors de la génération du résumé PDF.");
+    } finally {
+      setIsGeneratingPdf(false);
     }
-
-    content += `2. ORDONNANCES ET DOCUMENTS MEDICAUX (${medicalRecords.length})\n`;
-    content += `----------------------------------------------------\n`;
-    if (medicalRecords.length === 0) {
-      content += `Aucun document médical scanné enregistre.\n\n`;
-    } else {
-      medicalRecords.forEach((rec, idx) => {
-        content += `[Document #${idx + 1}] - Date : ${rec.recordDate}\n`;
-        content += `  Intitulé     : ${rec.title}\n`;
-        content += `  Catégorie    : ${rec.category}\n`;
-        content += `  Patient      : ${rec.patientName}\n`;
-        content += `  Notes        : ${rec.notes || 'Aucune note'}\n\n`;
-      });
-    }
-
-    content += `====================================================\n`;
-    content += `Document généré automatiquement via le portail sécurisé EPICURE.\n`;
-    content += `Contact Support & Suivi Dabou : +225 01 01 68 25 35 | direction@epiqure.online\n`;
-
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Bilan_Medical_EPICURE_${userName.replace(/\s+/g, '_')}_${dateStr}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
   const handleDownloadSingleReport = (rep: any) => {
-    const dateStr = rep.date || new Date().toISOString().split('T')[0];
-    let content = `====================================================\n`;
-    content += `    EPICURE DABOU - SYNTHESE DE CONSULTATION        \n`;
-    content += `    Service d'Itinéraire de Santé et de Proximité   \n`;
-    content += `====================================================\n\n`;
-    content += `Réf. Consultation : ${rep.id}\n`;
-    content += `Date de l'acte     : ${rep.date}\n`;
-    content += `Bénéficiaire      : ${rep.beneficiaryName}\n`;
-    content += `Soignant référent : Dr. Kouassi · Infirmier Référent EPICURE Dabou\n`;
-    content += `----------------------------------------------------\n\n`;
-    content += `RELEVE DE CONSTANTES :\n`;
-    content += `  - Tension artérielle : ${rep.tension}\n`;
-    content += `  - Glycémie capillaire: ${rep.glycemie} g/L\n\n`;
-    content += `OBSERVATIONS MEDICALES :\n`;
-    content += `  ${rep.notes || 'Examen de routine et auscultation réalisés à domicile.'}\n\n`;
-    content += `RECOMMANDATIONS & PRECAUTIONS :\n`;
-    content += `  ${rep.recommandations || 'Suivi régulier des règles d hygiene de vie.'}\n\n`;
-    content += `====================================================\n`;
-    content += `Document certifié par l'équipe soignante EPICURE Dabou.\n`;
-
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Synthese_Consultation_${rep.beneficiaryName.replace(/\s+/g, '_')}_${dateStr}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    try {
+      const patientNeighborhood = appointments[0]?.neighborhood || 'Dabou, Côte d\'Ivoire';
+      generateSingleReportPdf(rep, patientNeighborhood);
+      setPdfSuccessToast(`La synthèse de consultation du ${rep.date} a été téléchargée en PDF.`);
+      setTimeout(() => setPdfSuccessToast(null), 4000);
+    } catch (err) {
+      console.error("Erreur téléchargement rapport individuel PDF :", err);
+    }
   };
 
   // Simulator state
@@ -239,6 +211,25 @@ export default function ClientDashboard({
       return () => unsubscribe();
     } catch (err) {
       console.warn("Reports listener notice:", err);
+    }
+  }, [user]);
+
+  // Load User's Vital Signs
+  useEffect(() => {
+    if (!user) return;
+    try {
+      const q = query(collection(db, 'vitals'), where('userId', '==', user.uid));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const list: VitalSign[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push({ id: docSnap.id, ...docSnap.data() } as VitalSign);
+        });
+        list.sort((a, b) => new Date(`${b.date}T${b.time || '00:00'}`).getTime() - new Date(`${a.date}T${a.time || '00:00'}`).getTime());
+        setVitals(list);
+      });
+      return () => unsubscribe();
+    } catch (err) {
+      console.warn("Vitals listener notice in ClientDashboard:", err);
     }
   }, [user]);
 
@@ -369,6 +360,14 @@ export default function ClientDashboard({
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <button
+                onClick={() => setIsPdfModalOpen(true)}
+                className="px-4 py-2.5 rounded-xl bg-emerald-700/90 hover:bg-emerald-700 text-white font-bold text-xs transition-colors border border-emerald-500/50 shadow flex items-center gap-2 cursor-pointer"
+                title="Générer et télécharger un résumé PDF officiel du dossier médical"
+              >
+                <Download className="w-4 h-4" />
+                <span>Résumé Dossier (PDF)</span>
+              </button>
+              <button
                 onClick={onOpenBooking}
                 className="px-4 py-2.5 rounded-xl bg-white text-emerald-950 font-bold text-xs hover:bg-emerald-50 transition-colors shadow"
               >
@@ -382,6 +381,7 @@ export default function ClientDashboard({
         <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-8 no-scrollbar border-b border-slate-200">
           {[
             { id: 'overview', label: "Vue d'ensemble", icon: Activity },
+            { id: 'vitals', label: 'Constantes & Graphiques', icon: HeartPulse },
             { id: 'visits', label: 'Mes Visites', icon: Calendar, badge: appointments.length },
             { id: 'history', label: 'Historique Médical', icon: FileCheck, badge: reports.length + medicalRecords.filter(m => m.category === 'Ordonnance').length },
             { id: 'subscriptions', label: 'Mes Abonnements', icon: Shield, badge: subscriptions.length },
@@ -579,7 +579,54 @@ export default function ClientDashboard({
                 )}
               </div>
             </div>
+
+            {/* Quick Banner: Vital Signs & Recharts Graphs */}
+            <div className="bg-gradient-to-r from-teal-900 via-emerald-800 to-slate-900 rounded-2xl p-6 text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-6 border border-emerald-700/40">
+              <div className="space-y-1.5 max-w-xl">
+                <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-bold border border-emerald-400/30">
+                  <HeartPulse className="w-3.5 h-3.5" />
+                  <span>Nouveau · Carnet &amp; Graphiques Interactifs</span>
+                </div>
+                <h3 className="text-lg font-black tracking-tight text-white">
+                  Suivi des Constantes Vitales (Tension, Glycémie, Poids)
+                </h3>
+                <p className="text-xs text-emerald-100/90 leading-relaxed">
+                  Enregistrez vous-même les relevés de tension et de glycémie de votre famille, ou consultez les courbes d'évolution automatiques générées par Recharts.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 shrink-0">
+                <button
+                  onClick={() => setIsPdfModalOpen(true)}
+                  className="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-xs transition-all border border-white/20 flex items-center gap-2 cursor-pointer backdrop-blur-sm"
+                  title="Exporter le résumé PDF du dossier médical"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Résumé PDF Dossier</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('vitals')}
+                  className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold rounded-xl text-xs transition-all shadow-lg flex items-center gap-2 cursor-pointer"
+                >
+                  <Activity className="w-4 h-4" />
+                  <span>Consulter mes graphiques</span>
+                </button>
+              </div>
+            </div>
           </div>
+        )}
+
+        {/* TAB: VITALS & RECHARTS */}
+        {activeTab === 'vitals' && (
+          <VitalSignsTracker
+            user={user}
+            onExportPdf={() => setIsPdfModalOpen(true)}
+            beneficiaryNames={Array.from(new Set([
+              user?.displayName || '',
+              ...appointments.map(a => a.beneficiaryName),
+              ...subscriptions.map(s => s.beneficiaryName),
+              ...reports.map(r => r.beneficiaryName)
+            ])).filter(Boolean)}
+          />
         )}
 
         {/* TAB 2: VISITS */}
@@ -879,8 +926,20 @@ export default function ClientDashboard({
         {/* TAB 5: REPORTS */}
         {activeTab === 'reports' && (
           <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <h2 className="text-lg font-extrabold text-slate-900 mb-1">Vos Rapports d'Examens Médicaux</h2>
-            <p className="text-xs text-slate-500 mb-6">Compte-rendus rédigés par nos agents de santé après chaque visite à domicile à Dabou.</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-lg font-extrabold text-slate-900 mb-1">Vos Rapports d'Examens Médicaux</h2>
+                <p className="text-xs text-slate-500">Compte-rendus rédigés par nos agents de santé après chaque visite à domicile à Dabou.</p>
+              </div>
+              <button
+                onClick={() => setIsPdfModalOpen(true)}
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow flex items-center gap-2 self-start sm:self-auto cursor-pointer"
+                title="Générer le résumé PDF officiel du dossier médical"
+              >
+                <Download className="w-4 h-4" />
+                <span>Exporter Résumé PDF</span>
+              </button>
+            </div>
 
             {reports.length === 0 ? (
               <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
@@ -922,6 +981,18 @@ export default function ClientDashboard({
                         <strong>Recommandations :</strong> {rep.recommandations}
                       </div>
                     )}
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-200/80">
+                      <span className="text-[11px] text-slate-500">Réf. Acte : {rep.id}</span>
+                      <button
+                        onClick={() => handleDownloadSingleReport(rep)}
+                        className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                        title="Télécharger cette synthèse de consultation en PDF"
+                      >
+                        <Download className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Télécharger PDF</span>
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -945,12 +1016,12 @@ export default function ClientDashboard({
 
               <div className="flex flex-wrap items-center gap-3">
                 <button
-                  onClick={handleDownloadFullSummary}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow flex items-center gap-2 shrink-0"
-                  title="Exporter le bilan médical complet au format PDF / Fichier"
+                  onClick={() => setIsPdfModalOpen(true)}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow flex items-center gap-2 shrink-0 cursor-pointer"
+                  title="Exporter le bilan médical complet au format PDF officiel"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Download Summary</span>
+                  <span>Exporter Résumé PDF</span>
                 </button>
 
                 {/* Search input */}
@@ -1078,11 +1149,11 @@ export default function ClientDashboard({
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => handleDownloadSingleReport(rep)}
-                              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
-                              title="Télécharger la synthèse individuelle au format PDF / Fichier"
+                              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                              title="Télécharger la synthèse individuelle au format PDF officiel"
                             >
-                              <Download className="w-3.5 h-3.5 text-slate-600" />
-                              <span>Download Summary</span>
+                              <Download className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Synthèse PDF</span>
                             </button>
                             <button
                               onClick={() => {
@@ -1445,6 +1516,214 @@ export default function ClientDashboard({
               </div>
             </div>
           </div>
+        </div>
+      )}
+      {/* PDF Export Modal */}
+      {isPdfModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 space-y-6 max-h-[92vh] overflow-y-auto relative shadow-2xl border-t-8 border-emerald-600">
+            <button
+              onClick={() => setIsPdfModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-2 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors"
+              title="Fermer"
+            >
+              ✕
+            </button>
+
+            {/* Header */}
+            <div>
+              <div className="flex items-center gap-2 text-emerald-800 font-extrabold text-sm mb-1">
+                <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                <span>EPICURE DABOU · DOCUMENTATION OFFICIELLE</span>
+              </div>
+              <h2 className="text-xl font-extrabold text-slate-900">
+                Générer le Résumé Médical (PDF)
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Générez une synthèse officielle complète de votre dossier médical au format PDF, certifiée pour transmission à votre médecin traitant ou conservation personnelle.
+              </p>
+            </div>
+
+            {/* Patient Card Preview */}
+            <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100 space-y-2">
+              <span className="text-[10px] uppercase font-extrabold tracking-wider text-emerald-800">
+                Informations du Dossier Patient
+              </span>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Patient / Adhérent</span>
+                  <p className="font-extrabold text-slate-900">{user?.displayName || 'Adhérent EPICURE'}</p>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Localité</span>
+                  <p className="font-bold text-slate-700">Dabou, Basse-Côte (CI)</p>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Abonnement actif</span>
+                  <p className="font-bold text-emerald-700">{activeSub ? activeSub.planName : 'Suivi personnalisé'}</p>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Date d'émission</span>
+                  <p className="font-bold text-slate-700">{new Date().toLocaleDateString('fr-FR')}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Options Selection */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
+                  Sections à inclure dans le document PDF
+                </span>
+                <span className="text-[11px] text-slate-400">Cochez selon votre besoin</span>
+              </div>
+
+              <div className="space-y-2.5">
+                <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={pdfIncludeVitals}
+                    onChange={(e) => setPdfIncludeVitals(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                  />
+                  <div className="flex-1 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-slate-900">Constantes vitales (Tension, Glycémie, Poids)</span>
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                        {vitals.length + reports.length} relevés
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Tableau chronologique des mesures de tension artérielle, glycémie capillaire et alertes cliniques.
+                    </p>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={pdfIncludeVisits}
+                    onChange={(e) => setPdfIncludeVisits(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                  />
+                  <div className="flex-1 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-slate-900">Historique des visites médicales à domicile</span>
+                      <span className="px-2 py-0.5 rounded-md bg-teal-100 text-teal-800 text-[10px] font-bold">
+                        {appointments.length} visites
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Dates, quartiers d'intervention à Dabou, types d'actes et statuts de confirmation.
+                    </p>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={pdfIncludeReports}
+                    onChange={(e) => setPdfIncludeReports(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                  />
+                  <div className="flex-1 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-slate-900">Synthèses cliniques &amp; Conseils des soignants</span>
+                      <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[10px] font-bold">
+                        {reports.length} bilans
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Observations rédigées par nos infirmiers et médecins référents lors des passages.
+                    </p>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={pdfIncludeRecords}
+                    onChange={(e) => setPdfIncludeRecords(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                  />
+                  <div className="flex-1 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-slate-900">Répertoire des ordonnances &amp; documents</span>
+                      <span className="px-2 py-0.5 rounded-md bg-purple-100 text-purple-800 text-[10px] font-bold">
+                        {medicalRecords.length} pièces
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Liste inventaire des ordonnances et bilans scannés enregistrés dans le carnet numérique.
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Document Quality Certification Notice */}
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center gap-3 text-[11px] text-slate-600">
+              <Shield className="w-5 h-5 text-emerald-600 shrink-0" />
+              <span>
+                Document PDF officiel généré avec signature électronique, identifiant de certification unique et coordonnées du centre EPICURE Dabou (+225 01 01 68 25 35).
+              </span>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setIsPdfModalOpen(false)}
+                disabled={isGeneratingPdf}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                Annuler
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleDownloadFullSummary({
+                  includeVitals: pdfIncludeVitals,
+                  includeVisits: pdfIncludeVisits,
+                  includeReports: pdfIncludeReports,
+                  includeRecords: pdfIncludeRecords
+                })}
+                disabled={isGeneratingPdf || (!pdfIncludeVitals && !pdfIncludeVisits && !pdfIncludeReports && !pdfIncludeRecords)}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold transition-all shadow-md hover:shadow-lg flex items-center gap-2 cursor-pointer"
+              >
+                {isGeneratingPdf ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Génération en cours...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    <span>Télécharger le Résumé PDF</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {pdfSuccessToast && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-md p-4 bg-slate-900 text-white rounded-2xl shadow-2xl border border-emerald-500/50 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4">
+          <div className="w-8 h-8 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center shrink-0">
+            <Check className="w-5 h-5 stroke-[3]" />
+          </div>
+          <div className="flex-1 text-xs">
+            <p className="font-extrabold text-white">Exportation Réussie !</p>
+            <p className="text-slate-300 mt-0.5">{pdfSuccessToast}</p>
+          </div>
+          <button
+            onClick={() => setPdfSuccessToast(null)}
+            className="text-slate-400 hover:text-white p-1"
+          >
+            ✕
+          </button>
         </div>
       )}
     </div>

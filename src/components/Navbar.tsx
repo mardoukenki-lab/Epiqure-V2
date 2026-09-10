@@ -81,8 +81,8 @@ export default function Navbar({ onOpenBooking, onOpenDashboard, user, isAdmin, 
                   referrerPolicy="no-referrer"
                 />
               )}
-              <span className="max-w-[120px] truncate">
-                {isAdmin ? "Agent de Santé (Admin)" : (user.displayName?.split(' ')[0] || "Mon compte")}
+              <span className="max-w-[140px] truncate">
+                {isAdmin ? (user.displayName || "Espace Soignant / Agent") : (user.displayName?.split(' ')[0] || "Mon compte")}
               </span>
             </button>
           ) : (

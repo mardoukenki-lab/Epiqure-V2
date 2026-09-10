@@ -1,8 +1,9 @@
 import { useState, FormEvent } from 'react';
 import { motion } from 'motion/react';
 import { 
-  auth, googleProvider, signInWithPopup 
+  auth, googleProvider, signInWithPopup, db 
 } from '../lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
@@ -11,7 +12,8 @@ import {
   sendEmailVerification
 } from 'firebase/auth';
 import { 
-  Heart, ArrowLeft, Mail, Lock, User as UserIcon, Sparkles, AlertCircle, CheckCircle, PhoneCall
+  Heart, ArrowLeft, Mail, Lock, User as UserIcon, Sparkles, AlertCircle, CheckCircle, PhoneCall,
+  Stethoscope, Shield, Phone, MapPin, Award
 } from 'lucide-react';
 
 interface AuthPageProps {
@@ -24,6 +26,11 @@ export default function AuthPage({ onBack, onSuccess }: AuthPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [selectedRole, setSelectedRole] = useState<'client' | 'agent'>('client');
+  const [profession, setProfession] = useState("Infirmier(ère) Diplômé(e) d'État (IDE)");
+  const [matricule, setMatricule] = useState('');
+  const [phone, setPhone] = useState('');
+  const [interventionZone, setInterventionZone] = useState('Dabou Centre & Résidentiel');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -79,25 +86,55 @@ export default function AuthPage({ onBack, onSuccess }: AuthPageProps) {
       return;
     }
 
+    if (isSignUp && selectedRole === 'agent' && (!phone.trim() || !matricule.trim())) {
+      setError("Pour les agents de santé, le téléphone et le matricule professionnel sont obligatoires.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setSuccessMsg(null);
 
     try {
       if (isSignUp) {
-        // Create user
+        // Create user in Firebase Auth
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         // Update display name
         await updateProfile(userCredential.user, {
-          displayName: fullName
+          displayName: fullName.trim()
         });
+
+        // Immediately save role and profile in Firestore /users/{uid}
+        try {
+          await setDoc(doc(db, 'users', userCredential.user.uid), {
+            uid: userCredential.user.uid,
+            email: email.trim().toLowerCase(),
+            displayName: fullName.trim(),
+            role: selectedRole,
+            phone: phone.trim() || '',
+            profession: selectedRole === 'agent' ? profession : '',
+            matricule: selectedRole === 'agent' ? matricule.trim() : '',
+            interventionZone: selectedRole === 'agent' ? interventionZone : '',
+            status: 'active',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        } catch (dbErr) {
+          console.error("Firestore user creation note:", dbErr);
+        }
+
         // Send verification email
         try {
           await sendEmailVerification(userCredential.user);
         } catch (verifErr) {
           console.warn("Could not send email verification:", verifErr);
         }
-        setSuccessMsg("Votre compte a été créé avec succès ! Un e-mail de vérification vous a été envoyé.");
+
+        if (selectedRole === 'agent') {
+          setSuccessMsg("Votre compte professionnel d'Agent de Santé a été créé avec succès ! Bienvenue dans l'équipe soignante Epiqure.");
+        } else {
+          setSuccessMsg("Votre compte a été créé avec succès ! Un e-mail de vérification vous a été envoyé.");
+        }
       } else {
         // Sign in
         await signInWithEmailAndPassword(auth, email, password);
@@ -245,22 +282,166 @@ export default function AuthPage({ onBack, onSuccess }: AuthPageProps) {
           {/* Email Form */}
           <form onSubmit={handleEmailAuth} className="space-y-4">
             {isSignUp && (
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Votre Nom Complet</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                    <UserIcon className="w-4 h-4" />
+              <div className="space-y-4">
+                {/* Role Selector */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">
+                    Je crée mon compte en tant que :
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedRole('client')}
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                        selectedRole === 'client'
+                          ? 'border-emerald-600 bg-emerald-50/70 ring-2 ring-emerald-500/20 shadow-sm'
+                          : 'border-slate-200 bg-slate-50 hover:bg-white text-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
+                          selectedRole === 'client' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          <UserIcon className="w-3.5 h-3.5" />
+                        </div>
+                        <span className={`text-xs font-black ${
+                          selectedRole === 'client' ? 'text-emerald-950' : 'text-slate-800'
+                        }`}>
+                          Client / Famille
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-tight">
+                        Pour soigner et suivre mes proches à Dabou
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedRole('agent')}
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                        selectedRole === 'agent'
+                          ? 'border-amber-600 bg-amber-50/70 ring-2 ring-amber-500/20 shadow-sm'
+                          : 'border-slate-200 bg-slate-50 hover:bg-white text-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
+                          selectedRole === 'agent' ? 'bg-amber-600 text-white' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          <Stethoscope className="w-3.5 h-3.5" />
+                        </div>
+                        <span className={`text-xs font-black ${
+                          selectedRole === 'agent' ? 'text-amber-950' : 'text-slate-800'
+                        }`}>
+                          Agent de Santé
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-tight">
+                        Soignant (Infirmier, Aide-soignant, Médecin)
+                      </p>
+                    </button>
                   </div>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: Jean Koffi"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white text-xs text-slate-800 font-medium transition-all"
-                    disabled={loading}
-                  />
                 </div>
+
+                {/* Full Name */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+                    {selectedRole === 'agent' ? 'Nom et Titre Professionnel *' : 'Votre Nom Complet *'}
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                      <UserIcon className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="text"
+                      required
+                      placeholder={selectedRole === 'agent' ? 'Ex: Infirmier Yao Kouadio Paul' : 'Ex: Jean Koffi'}
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white text-xs text-slate-800 font-medium transition-all"
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+
+                {/* Extra Agent-Specific Fields */}
+                {selectedRole === 'agent' && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="space-y-3 p-4 bg-amber-50/50 rounded-2xl border border-amber-200/70"
+                  >
+                    <div className="flex items-center gap-1.5 text-amber-900 text-xs font-extrabold pb-1 border-b border-amber-200/50">
+                      <Award className="w-4 h-4 text-amber-600" />
+                      <span>Qualifications &amp; Coordonnées Professionnelles</span>
+                    </div>
+
+                    {/* Profession Dropdown */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-700 mb-1 uppercase tracking-wider">
+                        Titre / Qualification Médicale *
+                      </label>
+                      <select
+                        value={profession}
+                        onChange={(e) => setProfession(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-amber-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                      >
+                        <option value="Infirmier(ère) Diplômé(e) d'État (IDE)">Infirmier(ère) Diplômé(e) d'État (IDE)</option>
+                        <option value="Aide-Soignant(e) Certifié(e)">Aide-Soignant(e) Certifié(e)</option>
+                        <option value="Sage-Femme Diplômée d'État">Sage-Femme Diplômée d'État</option>
+                        <option value="Médecin Généraliste">Médecin Généraliste</option>
+                        <option value="Technicien(ne) Supérieur(e) de Santé">Technicien(ne) Supérieur(e) de Santé</option>
+                      </select>
+                    </div>
+
+                    {/* Matricule & Phone */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-700 mb-1 uppercase tracking-wider">
+                          N° Ordre / Matricule *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ex: IDE-2024-CI-482"
+                          value={matricule}
+                          onChange={(e) => setMatricule(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-amber-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-700 mb-1 uppercase tracking-wider">
+                          Téléphone / WhatsApp *
+                        </label>
+                        <input
+                          type="tel"
+                          required
+                          placeholder="Ex: 07 01 02 03 04"
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-amber-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Intervention Zone */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-700 mb-1 uppercase tracking-wider">
+                        Zone d'Intervention à Dabou
+                      </label>
+                      <select
+                        value={interventionZone}
+                        onChange={(e) => setInterventionZone(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-amber-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                      >
+                        <option value="Dabou Centre & Résidentiel">Dabou Centre &amp; Quartier Résidentiel</option>
+                        <option value="Armebé & Debrimou">Armebé &amp; Debrimou</option>
+                        <option value="Pass & Agneby">Pass &amp; Agneby</option>
+                        <option value="Tous secteurs de Dabou">Tous secteurs de Dabou (Mobile)</option>
+                      </select>
+                    </div>
+                  </motion.div>
+                )}
               </div>
             )}
 

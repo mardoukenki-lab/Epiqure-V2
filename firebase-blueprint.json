@@ -114,6 +114,29 @@
         "createdAt": { "type": "string" }
       },
       "required": ["id", "patientName", "category", "title"]
+    },
+    "VitalSign": {
+      "title": "VitalSign",
+      "description": "Vital signs measurement (weight, blood pressure, blood sugar, heart rate)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "systolic": { "type": "number" },
+        "diastolic": { "type": "number" },
+        "bloodPressureText": { "type": "string" },
+        "bloodSugar": { "type": "number" },
+        "bloodSugarContext": { "type": "string" },
+        "weight": { "type": "number" },
+        "height": { "type": "number" },
+        "heartRate": { "type": "number" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "patientName", "date"]
     }
   },
   "firestore": {
@@ -140,6 +163,10 @@
     "/medicalRecords/{recordId}": {
       "schema": "MedicalRecord",
       "description": "Medical record test results and prescriptions"
+    },
+    "/vitals/{vitalId}": {
+      "schema": "VitalSign",
+      "description": "User entered and agent tracked vital signs"
     }
   }
 }

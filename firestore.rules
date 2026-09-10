@@ -47,9 +47,9 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated() && (isOwner(userId) || isAgentOrAdmin());
       
-      // On create: users cannot self-assign the 'admin' or 'agent' role unless they are the superAdmin
+      // On create: users can self-register as 'client' or 'agent' (superAdmin can assign any role)
       allow create: if isAuthenticated() && isOwner(userId) && isValidId(userId) &&
-        (!('role' in request.resource.data) || request.resource.data.role == 'client' || isSuperAdmin());
+        (!('role' in request.resource.data) || request.resource.data.role in ['client', 'agent'] || isSuperAdmin());
       
       // On update: non-admins cannot modify the 'role' field (prevents self-privilege escalation)
       allow update: if isAuthenticated() && isValidId(userId) && (
@@ -145,6 +145,23 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isValidId(recordId) && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAuthenticated() && isValidId(recordId) && (
         resource.data.userId == request.auth.uid || isAdmin()
+      );
+    }
+
+    // ----------------------------------------------------
+    // Vital Signs (/vitals/{vitalId}) - Tracked constants (weight, BP, glycemia)
+    // ----------------------------------------------------
+    match /vitals/{vitalId} {
+      allow read: if isAuthenticated() && (
+        resource == null || resource.data.userId == request.auth.uid || isAgentOrAdmin()
+      );
+      allow create: if isAuthenticated() && isValidId(vitalId) && (
+        (request.resource.data.userId == request.auth.uid || isAgentOrAdmin()) &&
+        request.resource.data.patientName is string &&
+        request.resource.data.date is string
+      );
+      allow update, delete: if isAuthenticated() && isValidId(vitalId) && (
+        resource.data.userId == request.auth.uid || isAgentOrAdmin()
       );
     }
 

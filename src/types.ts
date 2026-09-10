@@ -57,11 +57,34 @@ export interface UserProfile {
   uid: string;
   email: string;
   displayName: string;
-  photoURL: string;
+  photoURL?: string;
   role?: 'client' | 'agent' | 'admin';
   phone?: string;
+  profession?: string;
+  matricule?: string;
+  interventionZone?: string;
+  status?: 'active' | 'pending' | 'verified';
   createdAt: string;
   updatedAt: string;
+}
+
+export interface VitalSign {
+  id: string;
+  userId: string;
+  patientName: string;
+  date: string; // YYYY-MM-DD
+  time?: string; // HH:mm
+  weight?: number; // in kg (ex: 74.5)
+  height?: number; // in cm (ex: 172)
+  systolic?: number; // in mmHg (ex: 120)
+  diastolic?: number; // in mmHg (ex: 80)
+  bloodPressureText?: string; // ex: "12/8" or "120/80"
+  bloodSugar?: number; // in g/L (ex: 0.95)
+  bloodSugarContext?: 'fasting' | 'post_meal' | 'random'; // À jeun / Après repas / Aléatoire
+  heartRate?: number; // in bpm (ex: 72)
+  notes?: string;
+  source?: 'patient' | 'agent';
+  createdAt: string;
 }
 
 export interface Visit {

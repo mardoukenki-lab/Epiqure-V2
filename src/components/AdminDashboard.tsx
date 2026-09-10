@@ -1,7 +1,9 @@
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, useMemo, useRef, FormEvent } from 'react';
 import { 
   ShieldCheck, Users, Stethoscope, Activity, Calendar, FileText, 
-  Plus, Check, Clock, AlertCircle, ArrowLeft, LogOut, Download, Search, CheckCircle2, X
+  Plus, Check, Clock, AlertCircle, ArrowLeft, LogOut, Download, Search, CheckCircle2, X,
+  Phone, MessageCircle, MapPin, Eye, Filter, HeartPulse, Sparkles, UserCheck, Copy,
+  CalendarCheck, ChevronRight
 } from 'lucide-react';
 import { Appointment, Subscription, MedicalRecord } from '../types';
 import { User as FirebaseUser } from 'firebase/auth';
@@ -14,7 +16,27 @@ interface UserProfile {
   displayName?: string;
   photoURL?: string;
   role?: string;
+  phone?: string;
+  profession?: string;
+  matricule?: string;
+  interventionZone?: string;
   createdAt?: string;
+}
+
+export interface ConsolidatedPatient {
+  id: string; // Unique patient reference (e.g. PAT-XXXXXX)
+  primaryUid?: string;
+  name: string;
+  phone: string;
+  email?: string;
+  neighborhood: string;
+  appointments: Appointment[];
+  subscriptions: Subscription[];
+  reports: any[];
+  statusBadge: { text: string; color: string };
+  lastInteractionDate?: string;
+  latestTension?: string;
+  latestGlycemie?: number | string;
 }
 
 interface AdminDashboardProps {
@@ -28,12 +50,19 @@ export default function AdminDashboard({
   onBack,
   onSignOut
 }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'subscriptions' | 'visits' | 'report-entry' | 'users'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'patients' | 'appointments' | 'subscriptions' | 'visits' | 'report-entry' | 'users'>('overview');
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>([]);
   const [reports, setReports] = useState<any[]>([]);
+
+  // Search and Patient Filter States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [patientFilterCategory, setPatientFilterCategory] = useState<'all' | 'pending-rdv' | 'subscribed' | 'has-reports'>('all');
+  const [selectedPatientModal, setSelectedPatientModal] = useState<ConsolidatedPatient | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Examination Report Entry State
   const [repBeneficiary, setRepBeneficiary] = useState('');
@@ -193,8 +222,264 @@ export default function AdminDashboard({
     a.click();
   };
 
-  const pendingAppointments = appointments.filter(a => a.status === 'Pending');
-  const activeSubscriptions = subscriptions.filter(s => s.status === 'Active' || s.status === 'En attente');
+  // Keyboard shortcut listener (Cmd+K / Ctrl+K) to focus search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Copy patient ID to clipboard
+  const handleCopyId = (id: string) => {
+    navigator.clipboard.writeText(id);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  // Switch to report form prefilled with patient data
+  const handleStartReportForPatient = (pat: ConsolidatedPatient) => {
+    setRepBeneficiary(pat.name);
+    setRepUserId(pat.primaryUid || '');
+    setActiveTab('report-entry');
+    if (selectedPatientModal) {
+      setSelectedPatientModal(null);
+    }
+  };
+
+  // 5. Consolidate unified Patient Directory across Users, Appointments, Subscriptions, and Reports
+  const consolidatedPatients = useMemo<ConsolidatedPatient[]>(() => {
+    const patientMap = new Map<string, ConsolidatedPatient>();
+
+    const getKey = (name: string, phone: string, uid?: string) => {
+      if (uid && uid.length > 5) return `uid_${uid}`;
+      const cleanName = (name || '').trim().toLowerCase();
+      const cleanPhone = (phone || '').replace(/\s+/g, '');
+      return cleanPhone ? `phone_${cleanPhone}` : `name_${cleanName}`;
+    };
+
+    // 1. From Registered Users
+    registeredUsers.forEach((u) => {
+      if (u.role === 'agent' || u.role === 'admin') return; // only clients/patients
+      const key = `uid_${u.uid}`;
+      const name = u.displayName || u.email.split('@')[0];
+      patientMap.set(key, {
+        id: `PAT-${u.uid.slice(0, 6).toUpperCase()}`,
+        primaryUid: u.uid,
+        name: name,
+        phone: u.phone || '',
+        email: u.email,
+        neighborhood: u.interventionZone || 'Dabou',
+        appointments: [],
+        subscriptions: [],
+        reports: [],
+        statusBadge: { text: 'Compte Enregistré', color: 'bg-slate-100 text-slate-700 border-slate-200' }
+      });
+    });
+
+    // 2. From Appointments
+    appointments.forEach((app) => {
+      const patientName = app.beneficiaryName || app.fullName || 'Patient';
+      const phone = app.beneficiaryPhone || app.phone || '';
+      const key = app.userId ? `uid_${app.userId}` : getKey(patientName, phone);
+
+      let existing = patientMap.get(key);
+      if (!existing) {
+        existing = {
+          id: `PAT-${app.id.slice(-6).toUpperCase()}`,
+          primaryUid: app.userId,
+          name: patientName,
+          phone: phone,
+          email: app.email,
+          neighborhood: app.beneficiaryNeighborhood || app.neighborhood || 'Dabou Centre',
+          appointments: [],
+          subscriptions: [],
+          reports: [],
+          statusBadge: { text: 'Visite Demandée', color: 'bg-amber-100 text-amber-800 border-amber-200' }
+        };
+        patientMap.set(key, existing);
+      }
+
+      existing.appointments.push(app);
+      if (!existing.phone && phone) existing.phone = phone;
+      if (!existing.neighborhood || existing.neighborhood === 'Dabou') {
+        existing.neighborhood = app.beneficiaryNeighborhood || app.neighborhood || 'Dabou Centre';
+      }
+    });
+
+    // 3. From Subscriptions
+    subscriptions.forEach((sub) => {
+      const patientName = sub.beneficiaryName || sub.householdOrCompanyName || sub.subscriberName || 'Abonné';
+      const phone = sub.beneficiaryPhone || sub.subscriberPhone || '';
+      const key = sub.userId ? `uid_${sub.userId}` : getKey(patientName, phone);
+
+      let existing = patientMap.get(key);
+      if (!existing) {
+        existing = {
+          id: `PAT-${sub.id.slice(-6).toUpperCase()}`,
+          primaryUid: sub.userId,
+          name: patientName,
+          phone: phone,
+          email: sub.subscriberEmail,
+          neighborhood: sub.beneficiaryNeighborhood || 'Dabou Centre',
+          appointments: [],
+          subscriptions: [],
+          reports: [],
+          statusBadge: { text: `Abonné ${sub.planName}`, color: 'bg-emerald-100 text-emerald-800 border-emerald-200' }
+        };
+        patientMap.set(key, existing);
+      }
+
+      existing.subscriptions.push(sub);
+      if (!existing.phone && phone) existing.phone = phone;
+      if (sub.beneficiaryNeighborhood) existing.neighborhood = sub.beneficiaryNeighborhood;
+    });
+
+    // 4. From Reports
+    reports.forEach((rep) => {
+      const patientName = rep.beneficiaryName || 'Patient';
+      const key = rep.userId ? `uid_${rep.userId}` : getKey(patientName, '');
+
+      let existing = patientMap.get(key);
+      if (!existing) {
+        existing = {
+          id: `PAT-${rep.id.slice(-6).toUpperCase()}`,
+          primaryUid: rep.userId,
+          name: patientName,
+          phone: '',
+          neighborhood: 'Dabou Centre',
+          appointments: [],
+          subscriptions: [],
+          reports: [],
+          statusBadge: { text: 'Suivi Médical', color: 'bg-blue-100 text-blue-800 border-blue-200' }
+        };
+        patientMap.set(key, existing);
+      }
+
+      existing.reports.push(rep);
+    });
+
+    // Compute badges, latest interaction, tension, and glycemie
+    const list = Array.from(patientMap.values()).map((pat) => {
+      const hasActiveSub = pat.subscriptions.some(s => (s.status as string)?.toLowerCase() === 'active');
+      const hasPendingApp = pat.appointments.some(a => (a.status as string)?.toLowerCase() === 'pending');
+      
+      let badge = { text: 'Patient Régulier', color: 'bg-slate-100 text-slate-800 border-slate-300' };
+      if (hasPendingApp) {
+        badge = { text: 'RDV en attente', color: 'bg-amber-100 text-amber-900 border-amber-300' };
+      } else if (hasActiveSub) {
+        badge = { text: 'Abonné Actif', color: 'bg-emerald-100 text-emerald-900 border-emerald-300' };
+      } else if (pat.reports.length > 0) {
+        badge = { text: `${pat.reports.length} rapport(s)`, color: 'bg-blue-100 text-blue-900 border-blue-300' };
+      }
+
+      // Collect dates
+      const dates: string[] = [];
+      pat.appointments.forEach(a => { if (a.preferredDate) dates.push(a.preferredDate); });
+      pat.reports.forEach(r => { if (r.date) dates.push(r.date); });
+      pat.subscriptions.forEach(s => { if (s.startDate) dates.push(s.startDate); });
+      dates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+
+      // Get latest report clinical data
+      let latestTension: string | undefined;
+      let latestGlycemie: number | string | undefined;
+      if (pat.reports.length > 0) {
+        const sortedReports = [...pat.reports].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+        latestTension = sortedReports[0].tension;
+        latestGlycemie = sortedReports[0].glycemie;
+      }
+
+      return {
+        ...pat,
+        statusBadge: badge,
+        lastInteractionDate: dates[0] || undefined,
+        latestTension,
+        latestGlycemie
+      };
+    });
+
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    return list;
+  }, [registeredUsers, appointments, subscriptions, reports]);
+
+  // Normalized search query string
+  const queryNormalized = searchQuery.trim().toLowerCase();
+
+  // 6. Filter Patients by name, unique ID, phone, neighborhood, or email
+  const filteredPatients = useMemo(() => {
+    let result = consolidatedPatients;
+
+    // Filter by query (Name or Unique ID or Phone or Neighborhood)
+    if (queryNormalized) {
+      result = result.filter((p) => {
+        const matchName = p.name.toLowerCase().includes(queryNormalized);
+        const matchId = p.id.toLowerCase().includes(queryNormalized) || (p.primaryUid && p.primaryUid.toLowerCase().includes(queryNormalized));
+        const matchPhone = p.phone.toLowerCase().replace(/\s+/g, '').includes(queryNormalized.replace(/\s+/g, ''));
+        const matchNeighborhood = p.neighborhood.toLowerCase().includes(queryNormalized);
+        const matchEmail = p.email ? p.email.toLowerCase().includes(queryNormalized) : false;
+        const matchAppId = p.appointments.some(a => a.id.toLowerCase().includes(queryNormalized));
+        const matchSubId = p.subscriptions.some(s => s.id.toLowerCase().includes(queryNormalized));
+        const matchRepId = p.reports.some(r => (r.id || '').toLowerCase().includes(queryNormalized));
+
+        return matchName || matchId || matchPhone || matchNeighborhood || matchEmail || matchAppId || matchSubId || matchRepId;
+      });
+    }
+
+    // Filter by quick category chip
+    if (patientFilterCategory === 'pending-rdv') {
+      result = result.filter(p => p.appointments.some(a => a.status?.toLowerCase() === 'pending'));
+    } else if (patientFilterCategory === 'subscribed') {
+      result = result.filter(p => p.subscriptions.length > 0);
+    } else if (patientFilterCategory === 'has-reports') {
+      result = result.filter(p => p.reports.length > 0);
+    }
+
+    return result;
+  }, [consolidatedPatients, queryNormalized, patientFilterCategory]);
+
+  // 7. Filtered Appointments
+  const filteredAppointments = useMemo(() => {
+    if (!queryNormalized) return appointments;
+    return appointments.filter(a => 
+      (a.beneficiaryName || a.fullName || '').toLowerCase().includes(queryNormalized) ||
+      a.id.toLowerCase().includes(queryNormalized) ||
+      (a.userId && a.userId.toLowerCase().includes(queryNormalized)) ||
+      (a.beneficiaryPhone || a.phone || '').toLowerCase().includes(queryNormalized) ||
+      (a.beneficiaryNeighborhood || a.neighborhood || '').toLowerCase().includes(queryNormalized) ||
+      a.serviceType.toLowerCase().includes(queryNormalized)
+    );
+  }, [appointments, queryNormalized]);
+
+  // 8. Filtered Subscriptions
+  const filteredSubscriptions = useMemo(() => {
+    if (!queryNormalized) return subscriptions;
+    return subscriptions.filter(s => 
+      (s.beneficiaryName || s.householdOrCompanyName || s.subscriberName || '').toLowerCase().includes(queryNormalized) ||
+      s.id.toLowerCase().includes(queryNormalized) ||
+      (s.userId && s.userId.toLowerCase().includes(queryNormalized)) ||
+      (s.subscriberPhone || s.beneficiaryPhone || '').toLowerCase().includes(queryNormalized) ||
+      (s.beneficiaryNeighborhood || '').toLowerCase().includes(queryNormalized) ||
+      s.planName.toLowerCase().includes(queryNormalized)
+    );
+  }, [subscriptions, queryNormalized]);
+
+  // 9. Filtered Users
+  const filteredUsers = useMemo(() => {
+    if (!queryNormalized) return registeredUsers;
+    return registeredUsers.filter(u => 
+      (u.displayName || '').toLowerCase().includes(queryNormalized) ||
+      u.uid.toLowerCase().includes(queryNormalized) ||
+      u.email.toLowerCase().includes(queryNormalized) ||
+      (u.role || '').toLowerCase().includes(queryNormalized)
+    );
+  }, [registeredUsers, queryNormalized]);
+
+  const pendingAppointments = appointments.filter(a => (a.status as string)?.toLowerCase() === 'pending');
+  const activeSubscriptions = subscriptions.filter(s => (s.status as string)?.toLowerCase() === 'active');
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 font-sans">
@@ -248,14 +533,130 @@ export default function AdminDashboard({
 
       {/* Main Container */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* PROMINENT PATIENT SEARCH BAR */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 mb-6 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="relative flex-1">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-amber-600">
+                <Search className="w-5 h-5" />
+              </div>
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Rechercher un patient par nom, identifiant unique (ex: PAT-..., UID, Ref RDV), téléphone ou quartier..."
+                className="w-full pl-11 pr-24 py-3 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:border-amber-500 rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-amber-500/15 transition-all shadow-inner"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute inset-y-0 right-10 pr-2 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                  title="Effacer la recherche"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                <kbd className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono font-bold text-slate-400 bg-white border border-slate-200 rounded shadow-xs">
+                  ⌘K
+                </kbd>
+              </div>
+            </div>
+
+            {/* Quick Result Counter or Direct Tab Switch */}
+            <div className="flex items-center gap-2 shrink-0">
+              {searchQuery ? (
+                <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-900 px-3.5 py-2.5 rounded-xl text-xs font-bold">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                  <span>{filteredPatients.length} patient(s) trouvé(s)</span>
+                  <button
+                    onClick={() => setActiveTab('patients')}
+                    className="ml-1 text-[11px] underline hover:text-amber-800 cursor-pointer font-extrabold"
+                  >
+                    Voir fiches
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setActiveTab('patients')}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer border border-slate-200"
+                >
+                  <Users className="w-4 h-4 text-amber-600" />
+                  <span>Dossiers Patients ({consolidatedPatients.length})</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Quick Filter Chips */}
+          <div className="flex items-center gap-2 overflow-x-auto pt-3 mt-3 border-t border-slate-100 no-scrollbar text-xs">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1 mr-1">
+              <Filter className="w-3 h-3 text-slate-400" />
+              <span>Filtres :</span>
+            </span>
+            <button
+              onClick={() => setPatientFilterCategory('all')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                patientFilterCategory === 'all'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Tous ({consolidatedPatients.length})
+            </button>
+            <button
+              onClick={() => setPatientFilterCategory('pending-rdv')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                patientFilterCategory === 'pending-rdv'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              RDV en attente ({pendingAppointments.length})
+            </button>
+            <button
+              onClick={() => setPatientFilterCategory('subscribed')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                patientFilterCategory === 'subscribed'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Abonnés Actifs ({activeSubscriptions.length})
+            </button>
+            <button
+              onClick={() => setPatientFilterCategory('has-reports')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                patientFilterCategory === 'has-reports'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Avec Bilans Médicaux ({consolidatedPatients.filter(p => p.reports.length > 0).length})
+            </button>
+
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="ml-auto text-xs text-rose-600 hover:underline font-bold flex items-center gap-1 cursor-pointer shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Effacer recherche</span>
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Navigation Tabs */}
         <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-8 no-scrollbar border-b border-slate-300">
           {[
             { id: 'overview', label: 'Vue Globale', icon: Activity },
+            { id: 'patients', label: 'Dossiers Patients', icon: Users, badge: filteredPatients.length },
             { id: 'appointments', label: 'Rendez-vous', icon: Calendar, badge: pendingAppointments.length },
             { id: 'subscriptions', label: 'Abonnements', icon: Stethoscope, badge: activeSubscriptions.length },
             { id: 'report-entry', label: 'Saisir Rapport', icon: FileText },
-            { id: 'users', label: 'Utilisateurs', icon: Users, badge: registeredUsers.length },
+            { id: 'users', label: 'Utilisateurs', icon: UserCheck, badge: registeredUsers.length },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -286,6 +687,70 @@ export default function AdminDashboard({
         {/* TAB 1: OVERVIEW */}
         {activeTab === 'overview' && (
           <div className="space-y-8">
+            {/* Real-time search matches preview on Overview */}
+            {searchQuery && (
+              <div className="bg-amber-50/80 rounded-2xl border border-amber-200 p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-amber-900">
+                    <Search className="w-4 h-4 text-amber-600" />
+                    <span className="font-extrabold text-sm">
+                      Résultats de recherche pour « {searchQuery} » ({filteredPatients.length} patient(s) trouvé(s))
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab('patients')}
+                    className="text-xs font-bold text-amber-700 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Ouvrir l'annuaire complet</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {filteredPatients.length === 0 ? (
+                  <p className="text-xs text-slate-500 italic">Aucun patient ne correspond à cette recherche.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {filteredPatients.slice(0, 6).map((pat) => (
+                      <div
+                        key={pat.id}
+                        className="bg-white p-3.5 rounded-xl border border-amber-200/80 shadow-xs flex flex-col justify-between hover:border-amber-400 transition-all"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="font-bold text-xs text-slate-900 truncate">{pat.name}</span>
+                            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                              {pat.id}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span className="truncate">{pat.neighborhood}</span>
+                            {pat.phone && <span className="shrink-0">· {pat.phone}</span>}
+                          </p>
+                        </div>
+                        <div className="pt-2 mt-2 border-t border-slate-100 flex items-center justify-between">
+                          <button
+                            onClick={() => setSelectedPatientModal(pat)}
+                            className="text-[11px] font-bold text-slate-700 hover:text-amber-700 flex items-center gap-1 cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Fiche</span>
+                          </button>
+                          <button
+                            onClick={() => handleStartReportForPatient(pat)}
+                            className="text-[11px] font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 cursor-pointer"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>Rapport</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* KPI Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
@@ -388,15 +853,201 @@ export default function AdminDashboard({
           </div>
         )}
 
+        {/* TAB: PATIENTS DIRECTORY */}
+        {activeTab === 'patients' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                <div>
+                  <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
+                    <span>Dossiers &amp; Répertoire des Patients (Dabou)</span>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900">
+                      {filteredPatients.length} patient(s)
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Fiches médicales, identifiants uniques, constantes vitales et suivi des interventions à domicile.
+                  </p>
+                </div>
+
+                {searchQuery && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                      Filtre actif : « {searchQuery} »
+                    </span>
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      Effacer
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {filteredPatients.length === 0 ? (
+                <div className="text-center py-16 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                  <div className="w-12 h-12 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center mx-auto mb-3">
+                    <Search className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-sm font-bold text-slate-800">Aucun patient trouvé</h3>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
+                    Aucun patient ne correspond à « {searchQuery} ». Vérifiez le nom, numéro de téléphone ou identifiant unique.
+                  </p>
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="mt-4 px-4 py-2 bg-amber-600 text-white rounded-xl text-xs font-bold hover:bg-amber-500 cursor-pointer shadow-xs"
+                    >
+                      Effacer les critères de recherche
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredPatients.map((pat) => (
+                    <div
+                      key={pat.id}
+                      className="rounded-2xl border border-slate-200 bg-white p-5 hover:border-amber-400 hover:shadow-md transition-all flex flex-col justify-between"
+                    >
+                      <div className="space-y-3">
+                        {/* Header: Avatar, Name, Unique ID */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 text-white font-black text-sm flex items-center justify-center shadow-xs shrink-0">
+                              {pat.name.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <h3 className="font-extrabold text-sm text-slate-900 line-clamp-1">{pat.name}</h3>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="font-mono text-[10px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                  {pat.id}
+                                </span>
+                                <button
+                                  onClick={() => handleCopyId(pat.id)}
+                                  title="Copier l'identifiant"
+                                  className="text-slate-400 hover:text-amber-600 transition-colors cursor-pointer"
+                                >
+                                  {copiedId === pat.id ? (
+                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  ) : (
+                                    <Copy className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border shrink-0 ${pat.statusBadge.color}`}>
+                            {pat.statusBadge.text}
+                          </span>
+                        </div>
+
+                        {/* Location and Contact */}
+                        <div className="text-xs text-slate-600 space-y-1 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                          <p className="flex items-center gap-1.5">
+                            <MapPin className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span className="font-semibold text-slate-800">{pat.neighborhood}</span>
+                          </p>
+                          {pat.phone && (
+                            <div className="flex items-center justify-between pt-1">
+                              <span className="font-mono text-slate-700">{pat.phone}</span>
+                              <div className="flex items-center gap-1.5">
+                                <a
+                                  href={`tel:${pat.phone}`}
+                                  className="p-1.5 rounded-lg bg-white text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 border border-slate-200 transition-colors"
+                                  title="Appeler"
+                                >
+                                  <Phone className="w-3 h-3" />
+                                </a>
+                                <a
+                                  href={`https://wa.me/${pat.phone.replace(/[^0-9]/g, '')}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1.5 rounded-lg bg-white text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border border-slate-200 transition-colors"
+                                  title="Contacter sur WhatsApp"
+                                >
+                                  <MessageCircle className="w-3 h-3" />
+                                </a>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Health Stats Overview */}
+                        <div className="grid grid-cols-2 gap-2 text-center text-xs">
+                          <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Dernière TA</span>
+                            <span className="font-extrabold text-slate-800 text-xs">
+                              {pat.latestTension || '—'}
+                            </span>
+                          </div>
+                          <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Glycémie</span>
+                            <span className="font-extrabold text-slate-800 text-xs">
+                              {pat.latestGlycemie ? `${pat.latestGlycemie} g/L` : '—'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Interactions count summary */}
+                        <div className="flex items-center justify-between text-[11px] text-slate-500 px-1">
+                          <span>{pat.appointments.length} rendez-vous</span>
+                          <span>{pat.reports.length} bilan(s) rédigé(s)</span>
+                        </div>
+                      </div>
+
+                      {/* Card Actions */}
+                      <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                        <button
+                          onClick={() => setSelectedPatientModal(pat)}
+                          className="flex-1 py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-slate-600" />
+                          <span>Dossier</span>
+                        </button>
+                        <button
+                          onClick={() => handleStartReportForPatient(pat)}
+                          className="flex-1 py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>Rapport</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* TAB 2: APPOINTMENTS */}
         {activeTab === 'appointments' && (
           <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <h2 className="text-lg font-extrabold text-slate-900 mb-1">Tous les Rendez-vous Clients (Dabou)</h2>
-            <p className="text-xs text-slate-500 mb-6">Validez, annulez ou modifiez le statut des demandes de visites.</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+              <div>
+                <h2 className="text-lg font-extrabold text-slate-900 mb-0.5">Tous les Rendez-vous Clients (Dabou)</h2>
+                <p className="text-xs text-slate-500">Validez, annulez ou modifiez le statut des demandes de visites.</p>
+              </div>
+              {searchQuery && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                    Filtre actif : « {searchQuery} » ({filteredAppointments.length} résultat(s))
+                  </span>
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="text-xs font-bold text-rose-600 hover:underline cursor-pointer"
+                  >
+                    Effacer
+                  </button>
+                </div>
+              )}
+            </div>
 
-            {appointments.length === 0 ? (
+            {filteredAppointments.length === 0 ? (
               <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-xs text-slate-500">
-                Aucun rendez-vous enregistré.
+                {searchQuery ? `Aucun rendez-vous ne correspond à « ${searchQuery} ».` : 'Aucun rendez-vous enregistré.'}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -412,7 +1063,7 @@ export default function AdminDashboard({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs">
-                    {appointments.map((app) => (
+                    {filteredAppointments.map((app) => (
                       <tr key={app.id} className="hover:bg-slate-50/80">
                         <td className="py-3.5 px-4 font-bold text-slate-900">
                           {app.beneficiaryName}
@@ -459,16 +1110,33 @@ export default function AdminDashboard({
         {/* TAB 3: SUBSCRIPTIONS */}
         {activeTab === 'subscriptions' && (
           <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <h2 className="text-lg font-extrabold text-slate-900 mb-1">Tous les Abonnements Actifs</h2>
-            <p className="text-xs text-slate-500 mb-6">Gestion des formules souscrites pour les foyers et entreprises à Dabou.</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+              <div>
+                <h2 className="text-lg font-extrabold text-slate-900 mb-0.5">Tous les Abonnements Actifs</h2>
+                <p className="text-xs text-slate-500">Gestion des formules souscrites pour les foyers et entreprises à Dabou.</p>
+              </div>
+              {searchQuery && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                    Filtre actif : « {searchQuery} » ({filteredSubscriptions.length} résultat(s))
+                  </span>
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="text-xs font-bold text-rose-600 hover:underline cursor-pointer"
+                  >
+                    Effacer
+                  </button>
+                </div>
+              )}
+            </div>
 
-            {subscriptions.length === 0 ? (
+            {filteredSubscriptions.length === 0 ? (
               <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-xs text-slate-500">
-                Aucun abonnement actif enregistré.
+                {searchQuery ? `Aucun abonnement ne correspond à « ${searchQuery} ».` : 'Aucun abonnement actif enregistré.'}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {subscriptions.map((sub) => (
+                {filteredSubscriptions.map((sub) => (
                   <div key={sub.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
@@ -634,12 +1302,29 @@ export default function AdminDashboard({
         {/* TAB 5: USERS */}
         {activeTab === 'users' && (
           <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <h2 className="text-lg font-extrabold text-slate-900 mb-1">Annuaire des Utilisateurs Enregistrés</h2>
-            <p className="text-xs text-slate-500 mb-6">Gestion des rôles (Client / Agent / Admin) et comptes inscrits.</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+              <div>
+                <h2 className="text-lg font-extrabold text-slate-900 mb-0.5">Annuaire des Utilisateurs Enregistrés</h2>
+                <p className="text-xs text-slate-500">Gestion des rôles (Client / Agent / Admin) et comptes inscrits.</p>
+              </div>
+              {searchQuery && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                    Filtre actif : « {searchQuery} » ({filteredUsers.length} résultat(s))
+                  </span>
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="text-xs font-bold text-rose-600 hover:underline cursor-pointer"
+                  >
+                    Effacer
+                  </button>
+                </div>
+              )}
+            </div>
 
-            {registeredUsers.length === 0 ? (
+            {filteredUsers.length === 0 ? (
               <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-xs text-slate-500">
-                Aucun utilisateur répertorié.
+                {searchQuery ? `Aucun utilisateur ne correspond à « ${searchQuery} ».` : 'Aucun utilisateur répertorié.'}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -653,7 +1338,7 @@ export default function AdminDashboard({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs">
-                    {registeredUsers.map((u) => (
+                    {filteredUsers.map((u) => (
                       <tr key={u.uid} className="hover:bg-slate-50/80">
                         <td className="py-3.5 px-4 font-bold text-slate-900">{u.displayName || 'Utilisateur'}</td>
                         <td className="py-3.5 px-4 text-slate-600">{u.email}</td>
@@ -685,6 +1370,223 @@ export default function AdminDashboard({
           </div>
         )}
       </div>
+
+      {/* MODAL: PATIENT DOSSIER COMPLET */}
+      {selectedPatientModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+          <div className="max-w-2xl w-full bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="bg-slate-900 text-white p-6 flex items-start justify-between">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-xl bg-amber-600 font-black text-base flex items-center justify-center text-white shrink-0">
+                  {selectedPatientModal.name.slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-extrabold text-lg tracking-tight text-white">{selectedPatientModal.name}</h3>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${selectedPatientModal.statusBadge.color}`}>
+                      {selectedPatientModal.statusBadge.text}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="font-mono text-xs text-amber-400 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                      ID Patient : {selectedPatientModal.id}
+                    </span>
+                    <button
+                      onClick={() => handleCopyId(selectedPatientModal.id)}
+                      title="Copier l'identifiant"
+                      className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+                    >
+                      {copiedId === selectedPatientModal.id ? (
+                        <span className="text-[11px] text-emerald-400 font-bold flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Copié
+                        </span>
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setSelectedPatientModal(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Contact & Location Strip */}
+            <div className="bg-slate-50 px-6 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-4 text-slate-600">
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4 text-amber-600" />
+                  <span className="font-semibold text-slate-800">{selectedPatientModal.neighborhood}</span>
+                </span>
+                {selectedPatientModal.email && (
+                  <span className="text-slate-500 hidden sm:inline">
+                    {selectedPatientModal.email}
+                  </span>
+                )}
+              </div>
+
+              {selectedPatientModal.phone && (
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-bold text-slate-800">{selectedPatientModal.phone}</span>
+                  <a
+                    href={`tel:${selectedPatientModal.phone}`}
+                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 border border-slate-200 text-xs font-bold transition-colors flex items-center gap-1"
+                  >
+                    <Phone className="w-3 h-3" />
+                    <span>Appeler</span>
+                  </a>
+                  <a
+                    href={`https://wa.me/${selectedPatientModal.phone.replace(/[^0-9]/g, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors flex items-center gap-1"
+                  >
+                    <MessageCircle className="w-3 h-3" />
+                    <span>WhatsApp</span>
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
+              {/* Section 1: Constantes & Bilans Médicaux */}
+              <div>
+                <h4 className="font-bold text-xs uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
+                  <HeartPulse className="w-4 h-4 text-rose-500" />
+                  <span>Constantes Vitales &amp; Derniers Bilans Cliniques</span>
+                </h4>
+
+                {selectedPatientModal.reports.length === 0 ? (
+                  <div className="p-4 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center text-xs text-slate-500">
+                    <p>Aucun rapport d'examen médical saisi pour ce patient.</p>
+                    <button
+                      onClick={() => handleStartReportForPatient(selectedPatientModal)}
+                      className="mt-2 text-xs font-bold text-amber-600 hover:underline cursor-pointer"
+                    >
+                      + Saisir le premier compte-rendu
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {selectedPatientModal.reports.map((rep, idx) => (
+                      <div key={rep.id || idx} className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-slate-900">Visite du {rep.date || 'Récemment'}</span>
+                          <span className="text-[11px] text-slate-400 font-mono">Ref: {rep.id || `REP-${idx + 1}`}</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                          <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Tension Artérielle</span>
+                            <span className="text-sm font-extrabold text-slate-900">{rep.tension || 'Non mesurée'}</span>
+                          </div>
+                          <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Glycémie à Jeun</span>
+                            <span className="text-sm font-extrabold text-slate-900">{rep.glycemie ? `${rep.glycemie} g/L` : 'Non mesurée'}</span>
+                          </div>
+                        </div>
+                        {rep.notes && (
+                          <p className="text-xs text-slate-600 bg-white p-2.5 rounded-lg border border-slate-200">
+                            <span className="font-bold text-slate-700">Notes :</span> {rep.notes}
+                          </p>
+                        )}
+                        {rep.recommandations && (
+                          <p className="text-xs text-slate-600 bg-amber-50/60 p-2.5 rounded-lg border border-amber-200">
+                            <span className="font-bold text-amber-900">Recommandations :</span> {rep.recommandations}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Section 2: Historique Rendez-vous */}
+              <div>
+                <h4 className="font-bold text-xs uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
+                  <CalendarCheck className="w-4 h-4 text-amber-600" />
+                  <span>Historique des Demandes de Visites</span>
+                </h4>
+
+                {selectedPatientModal.appointments.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">Aucun rendez-vous planifié.</p>
+                ) : (
+                  <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden text-xs">
+                    {selectedPatientModal.appointments.map((a) => (
+                      <div key={a.id} className="p-3 bg-white flex items-center justify-between gap-3">
+                        <div>
+                          <span className="font-bold text-slate-900 block">{a.serviceType}</span>
+                          <span className="text-[11px] text-slate-500">
+                            {a.preferredDate} à {a.preferredTime} · Quartier: {a.beneficiaryNeighborhood}
+                          </span>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          a.status?.toLowerCase() === 'confirmed' ? 'bg-emerald-100 text-emerald-800' :
+                          a.status?.toLowerCase() === 'cancelled' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {a.status?.toLowerCase() === 'confirmed' ? 'Confirmé' : a.status?.toLowerCase() === 'cancelled' ? 'Annulé' : 'En attente'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Section 3: Formule Abonnement */}
+              <div>
+                <h4 className="font-bold text-xs uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
+                  <Stethoscope className="w-4 h-4 text-emerald-600" />
+                  <span>Formules d'Abonnement Actives</span>
+                </h4>
+
+                {selectedPatientModal.subscriptions.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">Aucun abonnement en cours.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {selectedPatientModal.subscriptions.map((s) => (
+                      <div key={s.id} className="p-3 rounded-xl border border-emerald-200 bg-emerald-50/40 text-xs flex items-center justify-between">
+                        <div>
+                          <span className="font-extrabold text-emerald-900 block">{s.planName}</span>
+                          <span className="text-[11px] text-slate-600">
+                            Cycle {s.billingCycle} · Passage chaque {s.scheduledDayOfWeek || 'Samedi'}
+                          </span>
+                        </div>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800">
+                          {s.status || 'Actif'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex items-center justify-between gap-3">
+              <button
+                onClick={() => setSelectedPatientModal(null)}
+                className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+              >
+                Fermer
+              </button>
+
+              <button
+                onClick={() => handleStartReportForPatient(selectedPatientModal)}
+                className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
+              >
+                <FileText className="w-4 h-4" />
+                <span>Rédiger un Rapport d'Examen</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
