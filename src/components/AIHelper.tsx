@@ -12,7 +12,7 @@ export default function AIHelper() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'model',
-      text: "Bonjour ! Je suis l'assistant virtuel d'EPICURE. Comment puis-je vous aider aujourd'hui ? Je peux vous renseigner sur nos formules d'abonnement, nos visites de santé à domicile ou nos partenaires médicaux."
+      text: "Bonjour ! Je suis l'assistant virtuel d'EPICURE. Comment puis-je vous aider aujourd'hui ? Je peux vous renseigner sur nos formules d'abonnement ou nos visites de santé à domicile."
     }
   ]);
   const [input, setInput] = useState('');

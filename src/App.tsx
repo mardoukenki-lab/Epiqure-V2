@@ -7,7 +7,6 @@ import Services from './components/Services';
 import Pricing from './components/Pricing';
 import WhyChooseUs from './components/WhyChooseUs';
 import Steps from './components/Steps';
-import Partners from './components/Partners';
 import Faq from './components/Faq';
 import Contact from './components/Contact';
 import Footer from './components/Footer';
@@ -188,7 +187,6 @@ export default function App() {
                     handleOpenBooking(billingCycle === 'visite_unique' ? 'visit' : 'subscribe', planName, billingCycle)
                   }
                 />
-                <Partners />
                 <Faq />
                 <Contact />
               </main>
