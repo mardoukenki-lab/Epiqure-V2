@@ -40,6 +40,17 @@ export default function Footer() {
                 </a>
               </li>
               <li>
+                <a
+                  className="hover:text-white text-emerald-400 transition-colors font-medium flex items-center gap-1"
+                  href="https://boutique.epiqure.online/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <span>Boutique en ligne</span>
+                  <span className="text-[9px] bg-emerald-800 text-emerald-200 px-1 rounded">Ext</span>
+                </a>
+              </li>
+              <li>
                 <a className="hover:text-white transition-colors" href="#about">
                   Qui sommes-nous ?
                 </a>
