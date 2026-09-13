@@ -186,7 +186,9 @@ export default function Pricing({ onSelectPlan }: PricingProps) {
   ];
 
   return (
-    <section className="py-20 bg-slate-50/50 relative overflow-hidden" id="abonnements">
+    <section className="py-20 bg-slate-50/50 relative overflow-hidden" id="tarifs">
+      {/* Anchor for backward compatibility */}
+      <span id="abonnements" className="absolute -top-24 opacity-0 pointer-events-none" />
       {/* Background visual detail */}
       <div className="absolute top-1/2 -left-12 w-48 h-48 bg-emerald-50 rounded-full blur-3xl -z-10" />
       <div className="absolute bottom-10 -right-12 w-64 h-64 bg-blue-50/60 rounded-full blur-3xl -z-10" />

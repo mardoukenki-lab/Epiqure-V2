@@ -41,8 +41,19 @@ export default function Navbar({ onOpenBooking, onOpenDashboard, user, isAdmin, 
           <a className="text-slate-600 hover:text-primary-brand font-semibold transition-colors text-xs uppercase tracking-wider" href="#services">
             Services
           </a>
-          <a className="text-slate-600 hover:text-primary-brand font-semibold transition-colors text-xs uppercase tracking-wider" href="#abonnements">
-            Abonnements
+          <a className="text-slate-600 hover:text-primary-brand font-semibold transition-colors text-xs uppercase tracking-wider" href="#tarifs">
+            Tarifs
+          </a>
+          <a
+            className="text-slate-600 hover:text-primary-brand font-semibold transition-colors text-xs uppercase tracking-wider flex items-center gap-1"
+            href="https://blog.epiqure.online"
+            target="_blank"
+            rel="noreferrer"
+            id="nav-link-blog"
+            title="Accéder au Blog Epiqure"
+          >
+            <span>Blog</span>
+            <ExternalLink className="w-2.5 h-2.5 opacity-50" />
           </a>
           <a
             className="text-emerald-700 hover:text-emerald-600 font-bold transition-colors text-xs uppercase tracking-wider flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/60 shadow-2xs"
@@ -149,9 +160,20 @@ export default function Navbar({ onOpenBooking, onOpenDashboard, user, isAdmin, 
             <a
               onClick={() => setMobileMenuOpen(false)}
               className="text-slate-700 hover:text-primary-brand font-semibold py-1.5 text-sm uppercase tracking-wider"
-              href="#abonnements"
+              href="#tarifs"
             >
-              Abonnements
+              Tarifs
+            </a>
+            <a
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center justify-between py-1.5 text-slate-700 hover:text-primary-brand font-semibold text-sm uppercase tracking-wider"
+              href="https://blog.epiqure.online"
+              target="_blank"
+              rel="noreferrer"
+              id="mobile-nav-link-blog"
+            >
+              <span>Blog</span>
+              <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
             </a>
             <a
               onClick={() => setMobileMenuOpen(false)}

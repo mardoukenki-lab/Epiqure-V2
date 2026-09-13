@@ -35,8 +35,19 @@ export default function Footer() {
                 </a>
               </li>
               <li>
-                <a className="hover:text-white transition-colors" href="#abonnements">
-                  Forfaits d'Abonnement
+                <a className="hover:text-white transition-colors" href="#tarifs">
+                  Tarifs &amp; Formules
+                </a>
+              </li>
+              <li>
+                <a
+                  className="hover:text-white transition-colors flex items-center gap-1"
+                  href="https://blog.epiqure.online"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <span>Blog</span>
+                  <span className="text-[9px] bg-slate-800 text-slate-300 px-1 rounded">Ext</span>
                 </a>
               </li>
               <li>
