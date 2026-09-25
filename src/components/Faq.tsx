@@ -18,6 +18,10 @@ export default function Faq() {
       a: "Nous couvrons l'ensemble de la commune de Dabou et ses proches alentours : le Quartier Résidentiel, Dabou Centre, les quartiers Pass, Layo, ainsi que les villages intégrés comme Debrimou. Tous les frais de transport de nos professionnels de santé sont entièrement inclus dans le forfait d'abonnement."
     },
     {
+      q: "Combien de personnes sont prises en charge dans le Forfait Maison ?",
+      a: "Le Forfait Maison couvre jusqu'à 6 personnes par foyer lors de la visite hebdomadaire de l'équipe soignante. De plus, la prise en charge et le suivi sont totalement gratuits pour tous les enfants de moins de 12 ans de la famille !"
+    },
+    {
       q: "Comment s'effectue le règlement des abonnements ?",
       a: "Les abonnements sont mensuels et sans aucun engagement de durée. Pour faciliter la vie des parrains, nous acceptons les paiements locaux par Mobile Money (Wave, Orange Money, MTN MoMo) ainsi que les paiements sécurisés par carte de crédit pour la diaspora résidant à l'étranger."
     }

@@ -582,7 +582,7 @@ export default function BookingModal({
                             {bookingMode === 'annuel' ? ' / an' : ' / mois'}
                           </span>
                           <p className="text-[11px] text-slate-600 mt-1 leading-snug">
-                            Tout le foyer · 1 visite/semaine pour chaque membre.
+                            Jusqu'à 6 personnes · Gratuit pour les enfants &lt; 12 ans.
                           </p>
                         </div>
 
@@ -610,6 +610,16 @@ export default function BookingModal({
                           </p>
                         </div>
                       </div>
+
+                      {/* Forfait Maison specific detail banner */}
+                      {(plan.includes('Maison') || plan === 'Essentiel') && (
+                        <div className="p-3 bg-emerald-50/80 border border-emerald-200 rounded-xl text-xs text-emerald-950 flex items-start gap-2.5 mb-6">
+                          <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                          <div className="leading-relaxed">
+                            <span className="font-bold text-emerald-900">Avantage Forfait Maison :</span> Cette formule prend en charge jusqu'à <strong>6 personnes</strong> du foyer et le suivi médical est <strong>gratuit pour les enfants de moins de 12 ans de la famille</strong>.
+                          </div>
+                        </div>
+                      )}
 
                       {/* Scheduled Day Selector */}
                       <div>
@@ -825,7 +835,11 @@ export default function BookingModal({
                       </label>
                       <textarea
                         rows={2}
-                        placeholder="Ex: Mon parent a besoin d'un suivi très régulier de tension. Maison située près du Grand Marché..."
+                        placeholder={
+                          plan.includes('Maison') || plan === 'Essentiel'
+                            ? "Ex: Membres à suivre (jusqu'à 6 personnes, préciser s'il y a des enfants < 12 ans), repères d'accès à Dabou..."
+                            : "Ex: Mon parent a besoin d'un suivi régulier de tension. Maison située près du Grand Marché..."
+                        }
                         value={additionalInfo}
                         onChange={(e) => setAdditionalInfo(e.target.value)}
                         className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-accent-blue focus:outline-none text-slate-800 text-sm resize-none"

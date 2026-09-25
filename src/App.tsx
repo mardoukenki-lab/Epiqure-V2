@@ -15,6 +15,7 @@ import AIHelper from './components/AIHelper';
 import AuthPage from './components/AuthPage';
 import ClientDashboard from './components/ClientDashboard';
 import AdminDashboard from './components/AdminDashboard';
+import CursorGrid from './components/CursorGrid';
 import { Appointment, Subscription } from './types';
 
 // Firebase imports
@@ -151,7 +152,25 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-white font-sans text-slate-800 antialiased selection:bg-primary-brand selection:text-white" id="root-container">
+    <div className="min-h-screen bg-white font-sans text-slate-800 antialiased selection:bg-primary-brand selection:text-white relative" id="root-container">
+      {/* Site-wide Global Interactive Cursor Grid */}
+      <CursorGrid
+        global
+        cellSize={64}
+        color="#0284c7"
+        radius={140}
+        falloff="smooth"
+        holdTime={350}
+        fadeDuration={700}
+        lineWidth={1.2}
+        maxOpacity={0.6}
+        fillOpacity={0.06}
+        gridOpacity={0.02}
+        cellRadius={6}
+        clickPulse
+        pulseSpeed={650}
+      />
+
       <Routes>
         {/* Landing Page Route */}
         <Route
