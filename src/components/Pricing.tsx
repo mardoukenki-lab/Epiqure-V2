@@ -51,14 +51,15 @@ export default function Pricing({ onSelectPlan }: PricingProps) {
       name: "Forfait Entreprise",
       price: "15 000",
       numPrice: 15000,
-      badge: "Entreprises & Sites",
+      badge: "Entreprises · 10 pers.",
       period: "FCFA / mois (par site)",
-      subNote: "Soit 3 750 FCFA / semaine pour votre équipe",
-      desc: "La formule professionnelle dédiée aux entreprises et équipes pour préserver la santé des collaborateurs à Dabou.",
+      subNote: "Soit 3 750 FCFA / semaine pour 10 personnes",
+      desc: "La formule professionnelle dédiée aux entreprises et équipes jusqu'à 10 collaborateurs pour préserver la santé au travail à Dabou.",
       features: [
         "1 passage hebdomadaire de l'équipe soignante sur site",
+        "Prise en charge jusqu'à 10 personnes (salariés & collaborateurs)",
         "Visite planifiée le samedi ou dimanche selon le planning convenu",
-        "Dépistage individuel & suivi des constantes de chaque collaborateur présent",
+        "Dépistage individuel & suivi des constantes de 10 personnes",
         "Un rapport individuel rédigé par salarié ausculté",
         "Envoi sécurisé des rapports par Email ou WhatsApp (Salarié / RH)",
         "Assistance téléphonique d'orientation santé & suivi prioritaire"
@@ -115,16 +116,17 @@ export default function Pricing({ onSelectPlan }: PricingProps) {
       price: "150 000",
       numPrice: 150000,
       oldPrice: "180 000",
-      badge: "Entreprises · 2 mois offerts",
+      badge: "Entreprises · 10 pers. (2 mois offerts)",
       period: "FCFA / an (par site)",
       subNote: "Équivaut à ~12 500 FCFA / mois (économie de 30 000 FCFA)",
-      desc: "Couverture santé préventive annuelle pour les salariés de votre structure ou entreprise à Dabou.",
+      desc: "Couverture santé préventive annuelle pour jusqu'à 10 salariés de votre structure ou entreprise à Dabou.",
       features: [
         "52 interventions hebdomadaires d'équipe soignante sur site",
-        "Dépistages réguliers de l'ensemble des équipes et collaborateurs",
-        "Bilans de santé au travail semestriels et annuels",
+        "Prise en charge et suivi régulier de 10 personnes / collaborateurs",
+        "Dépistages réguliers de l'ensemble des équipes et bilans de santé au travail",
         "Comptes-rendus individuels confidentiels et synthèses RH",
-        "Assistance santé dédiée et conseils de prévention collective"
+        "Assistance santé dédiée et conseils de prévention collective",
+        "Économie immédiate de 30 000 FCFA sur l'année"
       ],
       isPopular: false,
       btnLabel: "Souscrire au Forfait Entreprise Annuel"

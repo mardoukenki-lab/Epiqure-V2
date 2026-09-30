@@ -22,6 +22,10 @@ export default function Faq() {
       a: "Le Forfait Maison couvre jusqu'à 6 personnes par foyer lors de la visite hebdomadaire de l'équipe soignante. De plus, la prise en charge et le suivi sont totalement gratuits pour tous les enfants de moins de 12 ans de la famille !"
     },
     {
+      q: "Combien de collaborateurs sont pris en charge dans le Forfait Entreprise ?",
+      a: "Le Forfait Entreprise prend en charge jusqu'à 10 personnes (salariés ou collaborateurs) par site lors du passage hebdomadaire sur votre lieu de travail à Dabou. Il comprend le dépistage individuel, la prise des constantes et la remise de bilans médicaux confidentiels avec synthèse RH."
+    },
+    {
       q: "Comment s'effectue le règlement des abonnements ?",
       a: "Les abonnements sont mensuels et sans aucun engagement de durée. Pour faciliter la vie des parrains, nous acceptons les paiements locaux par Mobile Money (Wave, Orange Money, MTN MoMo) ainsi que les paiements sécurisés par carte de crédit pour la diaspora résidant à l'étranger."
     }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import About from './components/About';
@@ -18,6 +18,82 @@ import AdminDashboard from './components/AdminDashboard';
 import CursorGrid from './components/CursorGrid';
 import { Appointment, Subscription } from './types';
 
+// Route SEO metadata mapping
+interface RouteMetadata {
+  title: string;
+  description: string;
+}
+
+const getRouteMetadata = (pathname: string, hash: string): RouteMetadata => {
+  if (pathname === '/auth') {
+    return {
+      title: 'Connexion & Inscription – EPICURE Santé Dabou',
+      description: "Accédez à votre espace sécurisé EPICURE : suivi de santé des proches à Dabou, comptes-rendus de visite soignante et gestion de vos forfaits."
+    };
+  }
+  if (pathname === '/dashboard') {
+    return {
+      title: 'Espace Patient & Famille – EPICURE Dabou',
+      description: "Consultez l'historique des visites soignantes, les constantes vitales de vos proches et le statut de vos forfaits de santé à domicile à Dabou."
+    };
+  }
+  if (pathname === '/admin') {
+    return {
+      title: 'Portail Administration & Soignants – EPICURE Dabou',
+      description: "Plateforme d'administration médicale : planning des passages à Dabou, dossiers médicaux des bénéficiaires et rapports d'interventions."
+    };
+  }
+
+  // Pathname is '/' (Landing page & sections)
+  if (pathname === '/') {
+    if (hash === '#tarifs') {
+      return {
+        title: 'Forfaits & Tarifs de Santé – EPICURE Dabou',
+        description: "Découvrez nos forfaits de visites médicales préventives à domicile à Dabou : Forfait Individuel, Forfait Maison et Forfait Entreprise dès 10 000 FCFA."
+      };
+    }
+    if (hash === '#services') {
+      return {
+        title: 'Nos Soins & Services Médicaux – EPICURE Dabou',
+        description: "Prise des constantes vitales, dépistage tensionnel & glycémie, pansements, carnet de santé numérique et orientation médicale d'urgence à Dabou."
+      };
+    }
+    if (hash === '#etapes') {
+      return {
+        title: 'Comment Ça Marche – Parcours de Soins EPICURE Dabou',
+        description: "Souscription en 3 étapes simples : réservation en ligne, passage hebdomadaire de l'équipe soignante à domicile et réception des comptes-rendus détaillés."
+      };
+    }
+    if (hash === '#faq') {
+      return {
+        title: 'Foire Aux Questions – EPICURE Santé Dabou',
+        description: "Toutes les réponses à vos questions sur les visites soignantes à domicile à Dabou, la couverture des forfaits, les paiements Mobile Money et cartes bancaires."
+      };
+    }
+    if (hash === '#contact') {
+      return {
+        title: 'Contact & Urgences Médicales – EPICURE Dabou',
+        description: "Contactez notre équipe de coordination médicale à Dabou par téléphone, WhatsApp ou formulaire. Assistance et orientation réactives 7j/7."
+      };
+    }
+    if (hash === '#a-propos') {
+      return {
+        title: "À Propos d'EPICURE – Santé de Proximité à Dabou",
+        description: "Notre mission : garantir un suivi médical digne, régulier et humain pour chaque famille et chaque parent à Dabou, Côte d'Ivoire."
+      };
+    }
+    return {
+      title: 'EPICURE – Soins & Suivi Médical à Domicile à Dabou',
+      description: "Service de visites de santé préventives à domicile à Dabou, Côte d'Ivoire. Suivi tensionnel, glycémie, bilans réguliers et carnet médical numérique pour vos proches."
+    };
+  }
+
+  return {
+    title: 'EPICURE – Service de Santé et Soins à Domicile à Dabou',
+    description: "Service de santé et visites préventives soignantes à domicile à Dabou, Côte d'Ivoire. Soins de proximité, dépistages et carnet médical numérique."
+  };
+};
+
 // Firebase imports
 import { auth, db, googleProvider, signInWithPopup, signOut } from './lib/firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
@@ -25,6 +101,7 @@ import { collection, query, where, onSnapshot, doc, setDoc, getDoc } from 'fireb
 
 export default function App() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [bookingType, setBookingType] = useState<'visit' | 'subscribe'>('visit');
   const [selectedPlan, setSelectedPlan] = useState<'Essentiel' | 'Sérénité Parents' | undefined>(undefined);
@@ -38,6 +115,40 @@ export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userRole, setUserRole] = useState<'client' | 'agent' | 'admin'>('client');
   const [authLoading, setAuthLoading] = useState(true);
+
+  // Dynamic SEO Title & Meta Description update based on active route and section hash
+  useEffect(() => {
+    const { title, description } = getRouteMetadata(location.pathname, location.hash);
+    document.title = title;
+
+    const setMetaTag = (attrName: 'name' | 'property', attrValue: string, content: string) => {
+      let el = document.querySelector(`meta[${attrName}="${attrValue}"]`);
+      if (!el) {
+        el = document.createElement('meta');
+        el.setAttribute(attrName, attrValue);
+        document.head.appendChild(el);
+      }
+      el.setAttribute('content', content);
+    };
+
+    setMetaTag('name', 'description', description);
+    setMetaTag('property', 'og:title', title);
+    setMetaTag('property', 'og:description', description);
+    setMetaTag('property', 'og:url', window.location.origin + location.pathname + location.hash);
+    setMetaTag('property', 'og:type', 'website');
+    setMetaTag('property', 'og:site_name', 'EPICURE');
+    setMetaTag('name', 'twitter:title', title);
+    setMetaTag('name', 'twitter:description', description);
+
+    // Update or insert canonical link
+    let canonical = document.querySelector('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement('link');
+      canonical.setAttribute('rel', 'canonical');
+      document.head.appendChild(canonical);
+    }
+    canonical.setAttribute('href', window.location.origin + location.pathname);
+  }, [location.pathname, location.hash]);
 
   // 1. Observe Authentication and Sync Profile/Data
   useEffect(() => {

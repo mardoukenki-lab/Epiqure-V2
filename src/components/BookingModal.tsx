@@ -606,7 +606,7 @@ export default function BookingModal({
                             {bookingMode === 'annuel' ? ' / an' : ' / mois'}
                           </span>
                           <p className="text-[11px] text-slate-600 mt-1 leading-snug">
-                            Sur site · Dépistage collaborateurs et rapports RH.
+                            Jusqu'à 10 collaborateurs · Dépistage &amp; bilans RH.
                           </p>
                         </div>
                       </div>
@@ -617,6 +617,16 @@ export default function BookingModal({
                           <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                           <div className="leading-relaxed">
                             <span className="font-bold text-emerald-900">Avantage Forfait Maison :</span> Cette formule prend en charge jusqu'à <strong>6 personnes</strong> du foyer et le suivi médical est <strong>gratuit pour les enfants de moins de 12 ans de la famille</strong>.
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Forfait Entreprise specific detail banner */}
+                      {(plan.includes('Entreprise') || plan === 'Sérénité Parents') && (
+                        <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-950 flex items-start gap-2.5 mb-6">
+                          <Check className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                          <div className="leading-relaxed">
+                            <span className="font-bold text-blue-950">Avantage Forfait Entreprise :</span> Cette formule professionnelle couvre jusqu'à <strong>10 personnes</strong> (salariés et collaborateurs) avec visite hebdomadaire sur site et bilans individuels confidentiels.
                           </div>
                         </div>
                       )}
@@ -836,7 +846,9 @@ export default function BookingModal({
                       <textarea
                         rows={2}
                         placeholder={
-                          plan.includes('Maison') || plan === 'Essentiel'
+                          plan.includes('Entreprise') || plan === 'Sérénité Parents'
+                            ? "Ex: Liste ou département des 10 collaborateurs, adresse du site à Dabou..."
+                            : plan.includes('Maison') || plan === 'Essentiel'
                             ? "Ex: Membres à suivre (jusqu'à 6 personnes, préciser s'il y a des enfants < 12 ans), repères d'accès à Dabou..."
                             : "Ex: Mon parent a besoin d'un suivi régulier de tension. Maison située près du Grand Marché..."
                         }
