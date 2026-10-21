@@ -166,10 +166,6 @@ export default function AuthPage({ onBack, onSuccess }: AuthPageProps) {
     <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans" id="auth-page-container">
       {/* Left visual brand sidebar - Desktop only */}
       <div className="hidden lg:flex lg:w-[45%] bg-gradient-to-br from-blue-900 via-indigo-950 to-slate-950 text-white p-16 flex-col justify-between relative overflow-hidden">
-        {/* Background ambient radial glow */}
-        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-emerald-500/5 rounded-full blur-3xl" />
-
         {/* Top brand */}
         <div className="relative z-10 flex items-center gap-3">
           <button 

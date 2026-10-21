@@ -9,10 +9,6 @@ interface HeroProps {
 export default function Hero({ onOpenBooking }: HeroProps) {
   return (
     <section className="relative min-h-[780px] pt-32 pb-16 flex items-center overflow-hidden bg-gradient-to-b from-blue-50/40 via-white to-white" id="home">
-      {/* Background decoration */}
-      <div className="absolute top-1/4 -left-36 w-96 h-96 bg-blue-100/40 rounded-full blur-3xl -z-10" />
-      <div className="absolute top-1/2 -right-36 w-96 h-96 bg-emerald-100/30 rounded-full blur-3xl -z-10" />
-
       <div className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
         {/* Left column */}
         <div className="space-y-6 lg:col-span-7">
